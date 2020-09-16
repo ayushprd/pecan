@@ -1,0 +1,229 @@
+---
+title: "Remote data module"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{remote_module-vignette}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Introduction
+Remote data module retrieves remote sensing data from Google Earth Engine and AppEEARS. The downloaded data can be used while performing further analyses in PEcAn. [Link to module documentation](https://pecanproject.github.io/pecan-documentation/develop/standalone-tools-modules.html#remote-data-module)
+
+In this vignette, the ouput Leaf Area Index from the BASGRA model for the site [Qvidja_ca6cm](https://www.qvidja.fi/en/front-page/)(siteid 1000026929) is compared with the LAI derived from Sentinel 2 - SNAP using the remote data module.
+
+This vignette assumes that you are running the PEcAn docker stack on your local machine.
+
+## Set-up
+
+1. **Sign up for the Google Earth Engine**. Follow the instructions [here](https://earthengine.google.com/new_signup/) to sign up for using GEE.
+
+2. **Install the RpTools Python package**. 
+a. Enter the RStudio container
+```bash
+docker exec -ti pecan_rstudio_1 /bin/bash
+```
+
+b. Install pip3
+```bash
+apt-get update
+apt-get install python3-pip
+```
+c. Navigate to `pecan/modules/data.remote/inst/RpTools`
+```bash
+cd /pecan/modules/data.remote/inst/RpTools
+```
+d. Use pip3 to install the package.
+```bash
+pip3 install -e .
+```
+
+3. **Authenticate GEE**. 
+```bash
+#this will open a browser and ask you to sign in with the Google account registered for GEE
+earthengine authenticate
+```
+
+## Creating and configuring `pecan.xml`
+
+Visit `http://localhost:8000/rstudio/` and create a file named pecan.xml and in it copy the below contents. Make sure to enter your own path in `<outdir>` and `<dbfiles>`.
+
+```
+<?xml version="1.0"?>
+<pecan>
+  <info>
+    <notes></notes>
+    <userid>-1</userid>
+    <username></username>
+    <date>2020/08/10 09:33:36 +0000</date>
+  </info>
+  <outdir>/pecan/files/</outdir>
+  <database>
+    <bety>
+      <user>bety</user>
+      <password>bety</password>
+      <host>postgres</host>
+      <dbname>bety</dbname>
+      <driver>PostgreSQL</driver>
+      <write>true</write>
+    </bety>
+    <dbfiles>/pecan/dbfiles</dbfiles>
+  </database>
+ <pfts>
+   <pft>
+    <name>timothy</name>
+   </pft>
+  </pfts>
+  <meta.analysis>
+    <iter>3000</iter>
+    <random.effects>
+     <on>FALSE</on>
+     <use_ghs>TRUE</use_ghs>
+    </random.effects>
+  </meta.analysis>
+  <ensemble>
+   <size>3</size>
+   <variable>LAI</variable>
+   <samplingspace>
+   <parameters>
+    <method>uniform</method>
+   </parameters>
+   <met>
+    <method>sampling</method>
+    </met>
+   </samplingspace>
+  </ensemble>
+  <model>
+    <id>1000000029</id>
+  </model>
+  <workflow>
+    <id>1000013938</id>
+  </workflow>
+  <remotedata>
+  <out_get_data>bands</out_get_data>
+  <source>gee</source>
+  <collection>COPERNICUS/S2_SR</collection>
+  <algorithm>snap</algorithm>
+  <out_process_data>LAI</out_process_data>
+  </remotedata>
+  <run>
+    <site>
+      <id>1000026929</id>
+      <met.start>2018-01-01 00:00:00</met.start>
+      <met.end>2019-12-31 00:00:00</met.end>
+    </site>
+    <inputs>
+   <met>
+    <path>/pecan/qvidja/CARBO_Qvidja</path>
+   </met>
+    <harvest>
+    <path>/pecan/qvidja/CARBO_Qvidja_harvest.txt</path>
+   </harvest>
+    </inputs>
+    <start.date>2018/01/01</start.date>
+    <end.date>2019/12/31</end.date>
+  </run>
+  <host>
+    <name>localhost</name>
+  </host>
+</pecan>
+```
+
+The remote data module is configrued using a set of xml tags inside the `<remotedata>` tag. Detailed information about the tags can be found in the documentation. The remotedata tags used in this workflow are,
+
+* `<out_get_data>` Type of raw data requested. Here bands from Sentinel 2.
+
+* `<source>` Source of the remote data - GEE
+
+* `<collection>` Collection name - S2
+  
+* `<algorithm>` Algorithm used for processing the raw data - SNAP 
+
+* `<out_process_data>` Type of processed data requested. LAI in this example.
+
+## Creating the workflow
+
+The code below can be run interactively or as a script. 
+
+```{r, eval=FALSE}
+# read & prepare settings
+settings <- PEcAn.settings::read.settings("pecan.xml")
+settings <- PEcAn.settings::prepare.settings(settings, force = TRUE)
+PEcAn.settings::write.settings(settings, outputfile = "pecan.CHECKED.xml")
+```
+
+```{r, eval=FALSE}
+# run remote process
+settings <- PEcAn.data.remote::remote_process(settings)
+# the output netCDF files will be stored at the dbfiles path 
+```
+
+```{r, eval=FALSE}
+# continue workflow, run model, get ensemble output
+settings <- PEcAn.workflow::do_conversions(settings)
+settings <- PEcAn.workflow::runModule.get.trait.data(settings)
+PEcAn.MA::runModule.run.meta.analysis(settings)
+settings <- PEcAn.workflow::runModule.run.write.configs(settings)
+PEcAn.settings::write.settings(settings, outputfile = "pecan.CONFIGS.xml")
+PEcAn.remote::runModule.start.model.runs(settings, stop.on.error = FALSE)
+```
+
+```{r, eval=FALSE}
+# load observations
+format <-  PEcAn.DB::query.format.vars(dbcon, settings$remotedata$pro_id)
+
+var.ind <- which(format$vars$input_name %in% c(toupper(settings$remotedata$out_process_data), 
+                                               paste0(toupper(settings$remotedata$out_process_data), "_STD")))
+
+data  <- PEcAn.benchmark::load_data(data.path = settings$remotedata$pro_path, format = format, vars.used.index = var.ind)
+
+# read model output & align with observations
+run.ids <- read.table(file.path(settings$rundir, "runs.txt"))
+model_ensemble <- list()
+for(i in seq_len(nrow(run.ids))){
+  model <- as.data.frame(PEcAn.utils::read.output(run.ids[i,1], outdir = file.path(settings$modeloutdir, run.ids[i,1]),
+                                                  settings$ensemble$start.year, settings$ensemble$end.year, 
+                                                  variables = c("time", settings$ensemble$variable)))
+  model.secs     <- udunits2::ud.convert(model$time, "days" ,"seconds")
+  model$posix    <- seq.POSIXt(from = as.POSIXlt(settings$run$start.date, tz="GMT"), by = round(diff(model.secs)[1]), length.out = length(model$time))
+  # align model-data
+  aligned_modobs <- PEcAn.benchmark::align_data(model.calc = model, obvs.calc = data, var = settings$ensemble$variable, align_method = "match_timestep")
+  
+  model_ensemble[[i]] <- aligned_modobs$LAI.m
+}
+```
+
+```{r, eval=FALSE}
+############## PLOT #######################
+
+var_ens <- do.call("rbind", model_ensemble)
+varCI <- apply(var_ens, 2, quantile, c(0.025, 0.5, 0.975), na.rm = TRUE)
+var_m <- apply(var_ens, 2, mean, na.rm = TRUE)
+cipoly <- 1:dim(varCI)[2]
+
+col1 <- "lightpink"
+col2 <- "coral"
+
+# plot
+par(mar = c(5, 5, 5, 5))
+mtitle <- paste0(settings$run$site$name, " ", settings$ensemble$variable, " ", 
+                 settings$ensemble$start.year, "-", settings$ensemble$end.year)
+plot(seq_along(aligned_modobs$posix), ylim = c(0,6), xaxt = "n",lwd = 3, 
+     cex.lab = 2.5, cex.axis = 2,
+     xlab = "Time", ylab = settings$ensemble$variable, main = mtitle, type = "n", cex.main=2)
+polygon(c(cipoly, rev(cipoly)),c(varCI[3,], rev(varCI[1,])),col=adjustcolor(col1,alpha.f=0.7),border=col1)
+lines(var_m,lwd=3,lty=2,col=adjustcolor(col2,alpha.f=0.7))
+
+points(seq_along(aligned_modobs$posix), data$LAI, pch=20, cex=2)
+arrows(seq_along(aligned_modobs$posix), data$LAI-data$standard_deviation_of_LAI, 
+       seq_along(aligned_modobs$posix), data$LAI+data$standard_deviation_of_LAI, length=0.05, angle=90, code=3, lwd=2)
+
+```
