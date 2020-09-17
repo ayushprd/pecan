@@ -20,7 +20,7 @@ Remote data module retrieves remote sensing data from Google Earth Engine and Ap
 
 In this vignette, the ouput Leaf Area Index from the BASGRA model for the site [Qvidja_ca6cm](https://www.qvidja.fi/en/front-page/)(siteid 1000026929) is compared with the LAI derived from Sentinel 2 - SNAP using the remote data module.
 
-This vignette assumes that you are running the PEcAn docker stack on your local machine.
+This vignette assumes that you are running the PEcAn docker stack on your local machine at port 8000.
 
 ## Set-up
 
@@ -54,7 +54,9 @@ earthengine authenticate
 
 ## Creating and configuring `pecan.xml`
 
-Visit `http://localhost:8000/rstudio/` and create a file named pecan.xml and in it copy the below contents. Make sure to enter your own path in `<outdir>` and `<dbfiles>`.
+Open RStudio by visiting `http://localhost:8000/rstudio/` the default username is carya and the password is illinois.
+
+Create a new file named pecan.xml, in it copy the below contents. Make sure to enter your own path in `<outdir>` and `<dbfiles>`.
 
 ```
 <?xml version="1.0"?>
@@ -167,12 +169,16 @@ settings <- PEcAn.data.remote::remote_process(settings)
 ```
 
 ```{r, eval=FALSE}
-# continue workflow, run model, get ensemble output
+# Do conversions
 settings <- PEcAn.workflow::do_conversions(settings)
+# Query the trait database for data and priors
 settings <- PEcAn.workflow::runModule.get.trait.data(settings)
+# Run the PEcAn meta.analysis
 PEcAn.MA::runModule.run.meta.analysis(settings)
+# Write model specific configs
 settings <- PEcAn.workflow::runModule.run.write.configs(settings)
 PEcAn.settings::write.settings(settings, outputfile = "pecan.CONFIGS.xml")
+# Start BASGRA model runs
 PEcAn.remote::runModule.start.model.runs(settings, stop.on.error = FALSE)
 ```
 
@@ -212,7 +218,6 @@ cipoly <- 1:dim(varCI)[2]
 col1 <- "lightpink"
 col2 <- "coral"
 
-# plot
 par(mar = c(5, 5, 5, 5))
 mtitle <- paste0(settings$run$site$name, " ", settings$ensemble$variable, " ", 
                  settings$ensemble$start.year, "-", settings$ensemble$end.year)
