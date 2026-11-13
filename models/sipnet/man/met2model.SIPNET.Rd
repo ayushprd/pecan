@@ -2,7 +2,7 @@
 % Please edit documentation in R/met2model.SIPNET.R
 \name{met2model.SIPNET}
 \alias{met2model.SIPNET}
-\title{met2model.SIPNET}
+\title{met2model wrapper for SIPNET}
 \usage{
 met2model.SIPNET(
   in.path,
@@ -10,31 +10,84 @@ met2model.SIPNET(
   outfolder,
   start_date,
   end_date,
+  var.names = NULL,
   overwrite = FALSE,
   verbose = FALSE,
   year.fragment = FALSE,
+  clim_format_version = c("v2", "v1"),
   ...
 )
 }
 \arguments{
 \item{in.path}{location on disk where inputs are stored}
 
-\item{in.prefix}{prefix of input and output files OR the full file name if year.fragment = TRUE}
+\item{in.prefix}{prefix of input and output files,}
 
 \item{outfolder}{location on disk where outputs will be stored}
 
-\item{start_date}{the start date of the data to be downloaded (will only use the year part of the date)}
+\item{start_date}{the start date of the data to be downloaded
+(will only use the year part of the date)}
 
-\item{end_date}{the end date of the data to be downloaded (will only use the year part of the date)}
+\item{end_date}{the end date of the data to be downloaded
+(will only use the year part of the date)}
+
+\item{var.names}{character: list of variable names to be extracted.
+Default NULL uses all variables from input file}
 
 \item{overwrite}{should existing files be overwritten}
 
 \item{verbose}{should the function be very verbose}
 
-\item{year.fragment}{the function should ignore whether or not the data is stored as a set of complete years (such as for forecasts).}
+\item{year.fragment}{the function should ignore whether or not the data is
+stored as a set of complete years (such as for forecasts).}
+
+\item{clim_format_version}{SIPNET clim file format to generate.
+Default "v2" writes 12 columns, "v1" writes the legacy 14-column format.}
+
+\item{...}{Additional arguments, currently ignored}
+}
+\value{
+a dataframe containing information about the files created
 }
 \description{
-met2model wrapper for SIPNET
+Reads weather data from CF-formatted NetCDFs and writes it in the \code{.clim}
+format expected by SIPNET: a 12-column tab-separated table with no headers.
+}
+\details{
+The columns of the output file are:
+\itemize{
+\item 4-digit year
+\item Day of year
+\item Hour of day
+\item Timestep size (days)
+\item Air temperature (degrees C)
+\item Soil temperature (degrees C)
+\item PAR (mol/m2/hr)
+\item Precip (mm)
+\item VPD (Pa)
+\item VPD of soil (Pa)
+\item Canopy vapor pressure (Pa)
+\item Wind speed (m/s)
+}
+
+When clim_format_version is "v1", the table has 14 columns:
+\itemize{
+\item column 1 is a spatial grid index, always set to 0
+\item columns 2-13 are the 12 described above
+\item column 14 is soil wetness as a fraction of saturation, always set to 0.6
+}
+
+These were needed by older versions of Sipnet, but never had any effect on
+PEcAn runs: PEcAn never used gridded runs and always configured Sipnet to
+calculate soil moisture internally.
+Model support for both the spatial index and soil moisture columns was removed from Sipnet >= v2.0.
+Newer versions now accept 14-column files, but ignore the first
+and last columns with a warning.
+
+SIPNET does not allow missing values in its inputs. If the result contains
+NAs after conversion, no file is written and the process returns an error.
+To fix this, consider using a formal gap-filling method such as
+\code{PEcAn.data.atmosphere::metgapfill()} before calling met2model.
 }
 \author{
 Luke Dramko, Michael Dietze, Alexey Shiklomanov, Rob Kooper

@@ -17,10 +17,8 @@ assim.batch <- function(settings) {
     settings$assim.batch$method <- "bruteforce.bs"
   }
 
-  if (settings$assim.batch$method == "bruteforce") {
-    settings <- pda.mcmc(settings)
-  } else if (settings$assim.batch$method == "bruteforce.bs") {
-    settings <- pda.mcmc.bs(settings)
+  if (settings$assim.batch$method == "bruteforce" | settings$assim.batch$method == "bruteforce.bs") {
+    PEcAn.logger::logger.severe(paste0("PDA method ", settings$assim.batch$method, " is no longer maintained. Please use one of the 'emulator' or 'bayesian.tools' options."))
   } else if (settings$assim.batch$method == "emulator") {
     settings <- pda.emulator(settings)
   } else if (settings$assim.batch$method == "bayesian.tools") {
@@ -156,7 +154,7 @@ pda.settings <- function(settings, params.id = NULL, param.names = NULL, prior.i
   }
   if (is.null(settings$assim.batch$chain)) {
     # Default
-    settings$assim.batch$chain <- 1
+    settings$assim.batch$chain <- 2
   }
   settings$assim.batch$chain <- as.numeric(settings$assim.batch$chain)
 
@@ -172,14 +170,16 @@ pda.settings <- function(settings, params.id = NULL, param.names = NULL, prior.i
 
   # n.knot: Number of emulator knots
   if (!is.null(n.knot)) {
-    settings$assim.batch$n.knot <- n.knot
+    settings$assim.batch$n.knot <- as.numeric(n.knot)
+  }else if(settings$assim.batch$method == "emulator"){
+    if (is.null(settings$assim.batch$n.knot)) {
+      settings$assim.batch$n.knot <- 100 # Default
+    }
+    settings$assim.batch$n.knot <- as.numeric(settings$assim.batch$n.knot)
   }
-  if (is.null(settings$assim.batch$n.knot)) {
-    settings$assim.batch$n.knot <- 100 # Default
-  }
-  settings$assim.batch$n.knot <- as.numeric(settings$assim.batch$n.knot)
 
-  # ----- Jump distribution / tuning parameters
+  # ----- Jump distribution / tuning parameters 
+
   # adapt: How often to adapt the MCMC. Defaults to iter/10
   if (!is.null(adapt)) {
     settings$assim.batch$jump$adapt <- adapt
@@ -221,11 +221,6 @@ pda.settings <- function(settings, params.id = NULL, param.names = NULL, prior.i
     settings$assim.batch$jump$jvar <- as.list(as.numeric(settings$assim.batch$jump$jvar))
     # have to add names or listToXml() won't work
     names(settings$assim.batch$jump$jvar) <- rep("jvar", length(settings$assim.batch$jump$jvar))
-  }
-
-  # diag.plot.iter: How often to do diagnostic plots. Just need to convert to numeric.
-  if (!is.null(settings$assim.batch$diag.plot.iter)) {
-    settings$assim.batch$diag.plot.iter <- as.numeric(settings$assim.batch$diag.plot.iter)
   }
 
   return(settings)
@@ -302,6 +297,7 @@ pda.load.priors <- function(settings, con, extension.check = FALSE) {
 
     if (length(pid) == 0) {
       pid <- grep("prior.distns.Rdata", files$file_name)  ## is there a prior file?
+      
     }
 
     if (length(pid) > 0) {
@@ -327,7 +323,11 @@ pda.load.priors <- function(settings, con, extension.check = FALSE) {
     # make sure there are no left over distributions in the environment
     suppressWarnings(rm(post.distns, prior.distns))
 
-    load(prior.paths[[i]])
+    distns <- new.env()
+    load(prior.paths[[i]], envir = "distns")
+    prior.distns <- distns$prior.distns
+    post.distns <- distns$post.distns
+    
     if (!exists("post.distns")) {
       prior.out[[i]] <- prior.distns
     } else {
@@ -605,7 +605,7 @@ pda.adjust.jumps <- function(settings, jmp.list, accept.rate, pnames = NULL) {
 } # pda.adjust.jumps
 
 
-##' Adjust PDA blcok MCMC jump size
+##' Adjust PDA block MCMC jump size
 ##'
 ##' @title Adjust PDA block MCMC jump size
 ##' @param settings a PEcAn settings list

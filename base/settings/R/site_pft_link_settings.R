@@ -27,7 +27,7 @@ site.pft.link.settings <- function(settings) {
 
   if (!is.null(pft.site.info$path)) {
     #lets read in the Look Up Table
-    LUT <- loadPath.sitePFT(settings, pft.site.info$path)
+    LUT <- loadPath.sitePFT(pft.site.info$path)
 
     #-- if the pft in the LUT is not defined under the pft tag in the body of
     # the pecan xml - Then I add that.
@@ -42,7 +42,7 @@ site.pft.link.settings <- function(settings) {
      new.pfts <-  pft.l %>%
        purrr::discard(~.x %in% def.pfts) %>%
        purrr::map(~list(name = as.character(.x), constants = 1)) %>%
-       stats::setNames(rep("pft", length(.)))
+       purrr::set_names("pft")
 
 
     #add them to the list

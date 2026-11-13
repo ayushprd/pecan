@@ -1,37 +1,28 @@
-##-----------------------------------------------------------------------------
-## Copyright (c) 2012 University of Illinois, NCSA.
-## All rights reserved. This program and the accompanying materials
-## are made available under the terms of the
-## University of Illinois/NCSA Open Source License
-## which accompanies this distribution, and is available at
-## http://opensource.ncsa.illinois.edu/license.html
-##-----------------------------------------------------------------------------
-
 #' check to see if inputs are specified - this should be part of the model code
 #' @title Check Inputs
 #' @param settings settings file
 #' @export check.inputs
 check.inputs <- function(settings) {
   if (is.null(settings$model$type)) return(settings)
-
+  
   # don't know how to check inputs
   if (is.null(settings$database$bety)) {
     PEcAn.logger::logger.info("No database connection, can't check inputs.")
     return(settings)
   }
-
+  
   # get list of inputs associated with model type
   dbcon <- PEcAn.DB::db.open(settings$database$bety)
   on.exit(PEcAn.DB::db.close(dbcon), add = TRUE)
-
+  
   inputs <- PEcAn.DB::db.query(
     paste0(
       "SELECT tag, format_id, required FROM modeltypes, modeltypes_formats ",
       "WHERE modeltypes_formats.modeltype_id = modeltypes.id ",
-        "AND modeltypes.name='", settings$model$type, "' ",
-        "AND modeltypes_formats.input"),
+      "AND modeltypes.name='", settings$model$type, "' ",
+      "AND modeltypes_formats.input"),
     con = dbcon)
-
+  
   # check list of inputs
   allinputs <- names(settings$run$inputs)
   if (nrow(inputs) > 0) {
@@ -39,7 +30,7 @@ check.inputs <- function(settings) {
       tag <- inputs$tag[i]
       hostname <- settings$host$name
       allinputs <- allinputs[allinputs != tag]
-
+      
       # check if tag exists
       if (is.null(settings$run$inputs[[tag]])) {
         if (inputs$required[i]) {
@@ -49,7 +40,7 @@ check.inputs <- function(settings) {
         }
         next
       }
-
+      
       # check if <id> exists
       if ("id" %in% names(settings$run$inputs[[tag]])) {
         id <- settings$run$inputs[[tag]][["id"]]
@@ -67,12 +58,17 @@ check.inputs <- function(settings) {
         }
       } else if ("path" %in% names(settings$run$inputs[[tag]])) {
         # can we find the file so we can set the tag.id
-        id <- PEcAn.DB::dbfile.id(
-          "Input",
-          settings$run$inputs[[tag]][["path"]],
-          dbcon,
-          hostname)
-        if (!is.na(id)) {
+        #adding for to loop over ensemble member filepaths 
+        id <- list()
+        path <- settings$run$inputs[[tag]][["path"]]
+        for (j in 1:length(path)){
+          id[j] <- PEcAn.DB::dbfile.id(
+            "Input",
+            path[[j]],
+            dbcon,
+            hostname)
+        }
+        if (any(!is.na(id))) {
           settings$run$inputs[[tag]][["id"]] <- id
         }
       }
@@ -101,15 +97,16 @@ check.inputs <- function(settings) {
       PEcAn.logger::logger.info("path", settings$run$inputs[[tag]][["path"]])
     }
   }
-
+  
   if (length(allinputs) > 0) {
     PEcAn.logger::logger.info(
       "Unused inputs found :",
       paste(allinputs, collapse = " "))
   }
-
+  
   return(settings)
 }
+
 
 # check database section
 #' @title Check Database
@@ -254,13 +251,11 @@ check.bety.version <- function(dbcon) {
   }
 
   # check if database is newer
-  last_migration_date <- lubridate::ymd_hms(utils::tail(versions, n = 1))
-  pecan_release_date <- lubridate::ymd(
-    utils::packageDescription("PEcAn.DB")$Date)
-  if (last_migration_date > pecan_release_date) {
+  unknown_migrations <- setdiff(versions, .known_bety_migrations)
+  if (any(unknown_migrations)) {
     PEcAn.logger::logger.warn(
-      "Last database migration", utils::tail(versions, n = 1),
-      "is more recent than this", pecan_release_date, "release of PEcAn.",
+      "Found database migration(s) not known by this release of PEcAn.settings:",
+      unknown_migrations,
       "This could result in PEcAn not working as expected.")
   }
 }
@@ -273,6 +268,7 @@ check.bety.version <- function(dbcon) {
 #' - pfts with at least one pft defined
 #' @title Check Settings
 #' @param settings settings file
+#' @param force Logical: Rerun check even if these settings have been checked previously?
 #' @return will return the updated settings values with defaults set.
 #' @author Rob Kooper, David LeBauer
 #' @export check.settings
@@ -397,7 +393,7 @@ check.settings <- function(settings, force = FALSE) {
         "qsub not specified using default value :", settings$host$qsub)
     }
     if (is.null(settings$host$qsub.jobid)) {
-      settings$host$qsub.jobid <- "Your job ([0-9]+) .*"
+      settings$host$qsub.jobid <- ".* ([0-9]+).*"
       PEcAn.logger::logger.info(
         "qsub.jobid not specified using default value :",
         settings$host$qsub.jobid)
@@ -454,25 +450,27 @@ check.settings <- function(settings, force = FALSE) {
   }
 
   # Check folder where outputs are written before adding to dbfiles
-  if (is.null(settings$database$dbfiles)) {
-    settings$database$dbfiles <- PEcAn.utils::full.path("~/.pecan/dbfiles")
-  } else {
-    if (substr(settings$database$dbfiles, 1, 1) != "/") {
-      PEcAn.logger::logger.warn(
-        "settings$database$dbfiles pathname", settings$database$dbfiles,
-        "is invalid\n",
-        "placing it in the home directory ",
-        Sys.getenv("HOME"))
-      settings$database$dbfiles <- file.path(
-        Sys.getenv("HOME"),
-        settings$database$dbfiles)
-    }
+  if (!is.null(settings$database)) {
+    if (is.null(settings$database$dbfiles)) {
+      settings$database$dbfiles <- PEcAn.utils::full.path("~/.pecan/dbfiles")
+    } else {
+      if (substr(settings$database$dbfiles, 1, 1) != "/") {
+        PEcAn.logger::logger.warn(
+          "settings$database$dbfiles pathname", settings$database$dbfiles,
+          "is invalid\n",
+          "placing it in the home directory ",
+          Sys.getenv("HOME"))
+        settings$database$dbfiles <- file.path(
+          Sys.getenv("HOME"),
+          settings$database$dbfiles)
+      }
 
-    settings$database$dbfiles <- normalizePath(
-      settings$database$dbfiles,
-      mustWork = FALSE)
+      settings$database$dbfiles <- normalizePath(
+        settings$database$dbfiles,
+        mustWork = FALSE)
+    }
+    dir.create(settings$database$dbfiles, showWarnings = FALSE, recursive = TRUE)
   }
-  dir.create(settings$database$dbfiles, showWarnings = FALSE, recursive = TRUE)
 
   # check all inputs exist
   settings <- papply(settings, check.inputs)
@@ -608,6 +606,7 @@ check.settings <- function(settings, force = FALSE) {
 
 #' @title Check Run Settings
 #' @param settings settings file
+#' @param dbcon database connection.
 #' @export check.run.settings
 check.run.settings <- function(settings, dbcon = NULL) {
   scipen <- getOption("scipen")
@@ -721,6 +720,7 @@ check.run.settings <- function(settings, dbcon = NULL) {
     if (is.null(settings$run$site$id)) {
       settings$run$site$id <- -1
     } else if (settings$run$site$id >= 0) {
+      site <- NULL
       if (!is.null(dbcon)) {
         site <- PEcAn.DB::db.query(
           paste(
@@ -798,6 +798,7 @@ check.run.settings <- function(settings, dbcon = NULL) {
 
 #' @title Check Model Settings
 #' @param settings settings file
+#' @param dbcon database connection.
 #' @export check.model.settings
 check.model.settings <- function(settings, dbcon = NULL) {
   # check modelid with values
@@ -902,7 +903,11 @@ check.model.settings <- function(settings, dbcon = NULL) {
     }
 
     # check on binary for given host
-    if (!is.null(settings$model$id) && (settings$model$id >= 0)) {
+    if (is.null(dbcon)) {
+      PEcAn.logger::logger.info(
+        "No database connection available, can't check model binary"
+      )
+    } else if (!is.null(settings$model$id) && (settings$model$id >= 0)) {
       binary <- PEcAn.DB::dbfile.file(
         "Model",
         settings$model$id,
@@ -921,21 +926,22 @@ check.model.settings <- function(settings, dbcon = NULL) {
       }
     } else {
       PEcAn.logger::logger.warn(
-        "No model binary sepcified in database for model ", settings$model$type)
+        "No model binary specified in database for model ", settings$model$type)
     }
   }
 
   return(settings)
 }
 
-#' @title Check Workflow Settings
+#' Check Workflow Settings
 #' @param settings settings file
-#' @export check.workflow.settings
+#' @param dbcon database connection
+#' @export
 check.workflow.settings <- function(settings, dbcon = NULL) {
   # check for workflow defaults
   fixoutdir <- FALSE
   if (!is.null(dbcon)
-      && settings$database$bety$write
+      && isTRUE(settings$database$bety$write)
       && ("model" %in% names(settings))) {
     if (!"workflow" %in% names(settings)) {
       now <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
@@ -1024,15 +1030,16 @@ check.database.settings <- function(settings) {
       # should runs be written to database
       if (is.null(settings$database$bety$write)) {
         PEcAn.logger::logger.info(
-          "Writing all runs/configurations to database.")
-        settings$database$bety$write <- TRUE
+          "database$bety$write not set.",
+          "Will not write any runs/configurations to database.")
+        settings$database$bety$write <- FALSE
       } else {
         settings$database$bety$write <- as.logical(settings$database$bety$write)
         if (settings$database$bety$write) {
           PEcAn.logger::logger.debug(
             "Writing all runs/configurations to database.")
         } else {
-          PEcAn.logger::logger.warn(
+          PEcAn.logger::logger.debug(
             "Will not write runs/configurations to database.")
         }
       }
@@ -1056,11 +1063,11 @@ check.database.settings <- function(settings) {
       # check database version
       check.bety.version(dbcon)
     } else {
-      PEcAn.logger::logger.warn(
+      PEcAn.logger::logger.info(
         "No BETY database information specified; not using database.")
     }
   } else {
-    PEcAn.logger::logger.warn(
+    PEcAn.logger::logger.info(
       "No BETY database information specified; not using database.")
   }
   return(settings)
@@ -1070,6 +1077,7 @@ check.database.settings <- function(settings) {
 #' @param settings settings file
 #' @export check.ensemble.settings
 check.ensemble.settings <- function(settings) {
+  
   # check ensemble
   if (!is.null(settings$ensemble)) {
     if (is.null(settings$ensemble$variable)) {
@@ -1090,6 +1098,10 @@ check.ensemble.settings <- function(settings) {
 
     if (is.null(settings$ensemble$start.year)) {
       if (!is.null(settings$run$start.date)) {
+        startdate <- lubridate::parse_date_time(
+          settings$run$start.date,
+          "ymd_HMS",
+          truncated = 3)
         settings$ensemble$start.year <- lubridate::year(
           settings$run$start.date)
         PEcAn.logger::logger.info(
@@ -1109,6 +1121,10 @@ check.ensemble.settings <- function(settings) {
 
     if (is.null(settings$ensemble$end.year)) {
       if (!is.null(settings$run$end.date)) {
+        enddate <- lubridate::parse_date_time(
+          settings$run$end.date,
+          "ymd_HMS",
+          truncated = 3)
         settings$ensemble$end.year <- lubridate::year(settings$run$end.date)
         PEcAn.logger::logger.info(
           "No end date passed to ensemble - using the run date (",
@@ -1142,21 +1158,22 @@ check.ensemble.settings <- function(settings) {
       PEcAn.logger::logger.severe(
        "Start year of ensemble should come before the end year of the ensemble")
     }
-  }
-  # Old version of pecan xml files which they don't have a sampling space
-  # or it's just sampling space and nothing inside it.
-  if (is.null(settings$ensemble$samplingspace)
-      || !is.list(settings$ensemble$samplingspace)) {
-    PEcAn.logger::logger.info(
-      "We are updating the ensemble tag inside the xml file.")
-    # I try to put ensemble method in older versions into the parameter space -
-    # If I fail (when no method is defined) I just set it as uniform
-    settings$ensemble$samplingspace$parameters$method <- settings$ensemble$method
-    if (is.null(settings$ensemble$samplingspace$parameters$method)) {
-      settings$ensemble$samplingspace$parameters$method <- "uniform"
+
+    # Old version of pecan xml files which they don't have a sampling space
+    # or it's just sampling space and nothing inside it.
+    if (is.null(settings$ensemble$samplingspace)
+        || !is.list(settings$ensemble$samplingspace)) {
+      PEcAn.logger::logger.info(
+        "We are updating the ensemble tag inside the xml file.")
+      # I try to put ensemble method in older versions into the parameter space -
+      # If I fail (when no method is defined) I just set it as uniform
+      settings$ensemble$samplingspace$parameters$method <- settings$ensemble$method
+      if (is.null(settings$ensemble$samplingspace$parameters$method)) {
+        settings$ensemble$samplingspace$parameters$method <- "uniform"
+      }
+      #putting something simple in the met
+      settings$ensemble$samplingspace$met$method <- "sampling"
     }
-    #putting something simple in the met
-    settings$ensemble$samplingspace$met$method <- "sampling"
   }
   return(settings)
 }

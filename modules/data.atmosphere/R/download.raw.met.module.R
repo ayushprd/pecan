@@ -67,7 +67,7 @@
   }
   
   if (register$scale == "regional") {
-    raw.id <- PEcAn.utils::convert.input(
+    raw.id <- PEcAn.DB::convert_input(
       input.id = NA,
       outfolder = outfolder,
       formatname = register$format$name,
@@ -79,7 +79,6 @@
       fcn = fcn,
       con = con,
       host = host,
-      browndog = NULL,
       write = TRUE,
       overwrite = overwrite,
       site_id = site.id,
@@ -96,7 +95,7 @@
     
   } else if (register$scale == "site") {
     # Site-level met
-    raw.id <- PEcAn.utils::convert.input(
+    raw.id <- PEcAn.DB::convert_input(
       input.id = NA,
       outfolder = outfolder,
       formatname = register$format$name,
@@ -108,7 +107,6 @@
       fcn = fcn,
       con = con,
       host = host,
-      browndog = NULL,
       write = TRUE,
       overwrite = overwrite,
       forecast = forecast,

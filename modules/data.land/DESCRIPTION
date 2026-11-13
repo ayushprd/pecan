@@ -1,8 +1,7 @@
 Package: PEcAn.data.land
 Type: Package
-Title: PEcAn functions used for ecological forecasts and reanalysis
-Version: 1.7.2
-Date: 2021-10-04
+Title: PEcAn Functions Used for Ecological Forecasts and Reanalysis
+Version: 1.9.0.9000
 Authors@R: c(person("Mike", "Dietze", role = c("aut", "cre"),
                      email = "dietze@bu.edu"),
              person("David", "LeBauer", role = c("aut"),
@@ -22,47 +21,71 @@ Description: The Predictive Ecosystem Carbon Analyzer (PEcAn) is a scientific
     model parameterization, execution, and analysis. The goal of PECAn is to
     streamline the interaction between data and models, and to improve the
     efficacy of scientific investigation.
+URL: https://pecanproject.github.io
+BugReports: https://github.com/PecanProject/pecan/issues
+Depends: R (>= 4.1.0)
 Imports:
+    arrow,
     coda,
-    datapack,
+    curl,
+    DBI,
     dplyr,
-    dplR,
+    duckdb,
+    foreach,
     fs,
+    future,
+    furrr,
+    httr2 (>= 1.1.0),
     lubridate,
     magrittr,
-    maptools,
-    mvtnorm,
     ncdf4 (>= 1.15),
-    neonUtilities,
-    PEcAn.benchmark,
-    PEcAn.data.atmosphere,
     PEcAn.DB,
     PEcAn.logger,
     PEcAn.remote,
-    PEcAn.settings,
     PEcAn.utils,
-    PEcAn.visualization,
     purrr,
-    rjags,
     rlang,
-    RCurl,
-    RPostgreSQL,
     sf,
-    sirt,
-    sp,
     stringr,
-    traits,
-    udunits2,
-    XML (>= 3.98-1.4)      
+    terra,
+    tibble,
+    tidyr,
+    tidyselect,
+    XML (>= 3.98-1.4)
 Suggests:
     dataone,
-    redland,
+    datapack,
+    doSNOW,
+    dplR,
+    getPass,
+    glue,
+    httr,
+    jsonlite,
+    jsonvalidate,
+    MASS,
+    MCMCpack,
+    mvtnorm,
+    neonUtilities,
+    neonstore,
+    PEcAn.benchmark,
+    PEcAn.settings,
+    PEcAn.visualization,
     raster,
-    rgdal,
-    testthat (>= 1.0.2)
+    readr,
+    redland,
+    reticulate,
+    rjags,
+    sirt,
+    sp,
+    testthat (>= 3.1.0),
+    traits,
+    usethis,
+    withr
+Remotes:
+    github::ropensci/traits
 License: BSD_3_clause + file LICENSE
 Copyright: Authors
-LazyLoad: yes
-LazyData: FALSE
+LazyData: true
 Encoding: UTF-8
-RoxygenNote: 7.1.2
+RoxygenNote: 7.3.3
+X-schema.org-keywords: soil-data, vegetation-data, land-cover

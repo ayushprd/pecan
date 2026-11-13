@@ -6,8 +6,13 @@
 \usage{
 nderiv(x, y)
 }
+\arguments{
+\item{x}{Name of variable to plot on X axis}
+
+\item{y}{Name of variable to plot on Y axis}
+}
 \value{
-der
+numeric vector of numerical derivatives of \code{y} with respect to \code{x}
 }
 \description{
 nderiv

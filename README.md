@@ -1,16 +1,17 @@
 [![GitHub Actions CI](https://github.com/PecanProject/pecan/workflows/CI/badge.svg)](https://github.com/PecanProject/pecan/actions)
-[![Slack](https://img.shields.io/badge/slack-login-green.svg)](https://pecanproject.slack.com/) 
+[![Slack](https://img.shields.io/badge/slack-login-green.svg)](https://pecanproject.slack.com/)
 [![Slack](https://img.shields.io/badge/slack-join_chat-green.svg)](https://join.slack.com/t/pecanproject/shared_invite/enQtMzkyODUyMjQyNTgzLWEzOTM1ZjhmYWUxNzYwYzkxMWVlODAyZWQwYjliYzA0MDA0MjE4YmMyOTFhMjYyMjYzN2FjODE4N2Y4YWFhZmQ)
 [![DOI](https://zenodo.org/badge/4469/PecanProject/pecan.svg)](https://zenodo.org/badge/latestdoi/4469/PecanProject/pecan)
 
-
+> Due to spam we have disabled the automatic signup to slack. To access our slack space, please email kooper@illinois.edu to get an invite.
 
 ## Our Vision
+
 #### Ecosystem science, policy, and management informed by the best available data and models
 
 ## Our Mission
-#### Develop and promote accessible tools for reproducible ecosystem modeling and forecasting
 
+#### Develop and promote accessible tools for reproducible ecosystem modeling and forecasting
 
 ## What is PEcAn?
 
@@ -22,28 +23,49 @@ PEcAn is not itself an ecosystem model, and it can be used to with a variety of 
 
 ## Documentation
 
-Consult documentation of the PEcAn Project; either the [lastest stable development](https://pecanproject.github.io/pecan-documentation/develop/) branch, the latest [release](https://pecanproject.github.io/pecan-documentation/master/). Documentation from [earlier releases is here](https://pecanproject.github.io/documentation.html).
+PEcAn documentation is available for both the [latest stable development](https://pecanproject.github.io/pecan-documentation/develop/) branch and the [latest release](https://pecanproject.github.io/pecan-documentation/latest/). Documentation for [earlier releases](https://pecanproject.github.io/documentation/) is also available.
+
+Package-level reference documentation for PEcAn modules is generated using [pkgdown](https://pkgdown.r-lib.org/) and can be found [here](https://pecanproject.github.io/package-documentation/develop/)
 
 ## Getting Started
 
-See our ["Tutorials Page"](https://pecanproject.github.io/tutorials.html) that provides self-guided tutorials, links to vignettes, and an overview presentation.
+See our ["Tutorials Page"](https://pecanproject.github.io/tutorials/) that provides self-guided tutorials, links to vignettes, and an overview presentation.
+
+### Notebook-based tutorials
+
+The **recommended** way to get started with PEcAn is through the notebook-based tutorials. These provide reproducible, end-to-end examples of PEcAn workflows using rendered **Quarto** notebooks.
+
+Current tutorials include:
+- [Running a PEcAn workflow](https://pecanproject.github.io/pecan-documentation/develop/rendered-demo-notebooks/run_pecan.html)
+- [Uncertainty analysis tutorial](https://pecanproject.github.io/pecan-documentation/develop/rendered-demo-notebooks/uncertainty.html)
 
 ### Installation
 
-Complete instructions on how to install PEcAn can be found in the [documentation here](https://pecanproject.github.io/pecan-documentation/develop/pecan-manual-setup.html). To get PEcAn up and running you can use one of three methods:
-1. Run a [Virtual Machine](https://pecanproject.github.io/pecan-documentation/develop/pecan-manual-setup.html#install-vm). This is recommended for students and new users, and provides a consistent, tested environment for each release.
-2. Use [Docker](https://pecanproject.github.io/pecan-documentation/develop/pecan-manual-setup.html#install-docker). This is recommended, especially for development and production deployment.
-3. Install all of the components individually on your own Linux or MacOS computer or server. This is called a ['native install'](https://pecanproject.github.io/pecan-documentation/develop/pecan-manual-setup.html#install-native), but is more challenging and has relatively few advantages over using Docker.
+Complete instructions on how to install PEcAn can be found in the [documentation here](https://pecanproject.github.io/pecan-documentation/develop/pecan-manual-setup.html). To get PEcAn up and running you can use one of the following methods:
+
+1. Use [Docker](https://pecanproject.github.io/pecan-documentation/develop/install-docker.html#install-docker). This is recommended, especially for development and production deployment.
+2. Install all of the PEcAn R packages on your own Linux or MacOS computer or server. This can be done by [installing from r-universe](https://pecanproject.github.io/pecan-documentation/develop/r-universe.html):
+
+```R
+# Enable repository from pecanproject
+options(repos = c(
+  pecanproject = 'https://pecanproject.r-universe.dev',
+  CRAN = 'https://cloud.r-project.org'))
+# Download and install PEcAn.all in R
+install.packages('PEcAn.all')
+```
+
+Some functionalities will be limited without also installing the Postgres database ([BETYdb](https://pecanproject.github.io/pecan-documentation/develop/osinstall.html#install-bety)), though we are making steady progress toward removing this dependency.
 
 ### Website
 
-Visit our [webage](https://pecanproject.github.io) to keep up with latest news, version, and information about the PEcAn Project
+Visit our [webpage](https://pecanproject.github.io) to keep up with latest news, version, and information about the PEcAn Project
 
-#### Web Interface demo
-The fastest way to begin modeling ecosystems is through the PEcAn web interface.  
-We have a [demo website](http://pecan.ncsa.illinois.edu/pecan) that runs the current version of PEcAn. Using this instance you can perform a run using either ED or SIPNET at any of the predefined sites.
+#### Web Interface demo (legacy)
 
-The demo instance only allows for runs at pecan.ncsa.illinois.edu. Once you have set up the run it will execute on our server; depending on the number of people executing a model and the model selected this can take between a few seconds and a few minutes to finish. Once it's finished, you see the results of the execution and can plot the outputs of the model. Complete examples of a few executions can be found in our online [tutorials](http://pecanproject.github.io/tutorials.html).
+The PEcAn web interface is considered a legacy interface and is **no longer** the recommended entry point for new users.
+
+Notebook-based tutorials provide reproducible, up-to-date examples of PEcAn workflows and are the recommended starting point for learning and exploration.
 
 ## Publications
 
@@ -72,12 +94,16 @@ University of Illinois/NCSA Open Source License
 Copyright (c) 2012, University of Illinois, NCSA.  All rights reserved.
 
 PEcAn project
-www.pecanproject.org
+<www.pecanproject.org>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the  "Software"), to deal with the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
-- Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimers.
-- Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimers in the documentation and/or other materials provided with the distribution.
-- Neither the names of University of Illinois, NCSA, nor the names of its contributors may be used to endorse or promote products derived from this Software without specific prior written permission.
+* Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimers.
+* Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimers in the documentation and/or other materials provided with the distribution.
+* Neither the names of University of Illinois, NCSA, nor the names of its contributors may be used to endorse or promote products derived from this Software without specific prior written permission.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON INFRINGEMENT. IN NO EVENT SHALL THE CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF  CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS WITH THE SOFTWARE.
+
+## Activities
+
+![Alt](https://repobeats.axiom.co/api/embed/9d39b0af80fbfa979e349a529c05f21bbac9f858.svg "Repobeats analytics image")

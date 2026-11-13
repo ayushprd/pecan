@@ -2,46 +2,75 @@
 % Please edit documentation in R/sda.enkf_MultiSite.R
 \name{sda.enkf.multisite}
 \alias{sda.enkf.multisite}
-\title{sda.enkf.multisite}
+\title{State Variable Data Assimilation: Ensemble Kalman Filter and Generalized ensemble filter}
 \usage{
 sda.enkf.multisite(
   settings,
   obs.mean,
   obs.cov,
   Q = NULL,
-  restart = FALSE,
-  forceRun = TRUE,
-  keepNC = TRUE,
-  control = list(trace = TRUE, FF = FALSE, interactivePlot = FALSE, TimeseriesPlot =
-    FALSE, BiasPlot = FALSE, plot.title = NULL, facet.plots = FALSE, debug = FALSE, pause
-    = FALSE, Profiling = FALSE, OutlierDetection = FALSE),
+  restart = NULL,
+  pre_enkf_params = NULL,
+  ensemble.samples = NULL,
+  control = list(TimeseriesPlot = FALSE, OutlierDetection = FALSE, send_email = NULL,
+    keepNC = TRUE, forceRun = TRUE, run_parallel = TRUE, MCMC.args = NULL, merge_nc =
+    TRUE, execution = "local"),
+  debias = list(cov.dir = NULL, t.start = NULL, residual.lag = NULL),
   ...
 )
 }
 \arguments{
 \item{settings}{PEcAn settings object}
 
-\item{obs.mean}{List of dataframe of observation means, named with observation datetime.}
+\item{obs.mean}{Lists of date times named by time points, which contains lists of sites named by site ids, which contains observation means for each state variables of each site for each time point.}
 
-\item{obs.cov}{List of covariance matrices of state variables , named with observation datetime.}
+\item{obs.cov}{Lists of date times named by time points, which contains lists of sites named by site ids, which contains observation covariances for all state variables of each site for each time point.}
 
 \item{Q}{Process covariance matrix given if there is no data to estimate it.}
 
-\item{restart}{Used for iterative updating previous forecasts. When the restart is TRUE it read the object in SDA folder written from previous SDA.}
+\item{restart}{Used for iterative updating previous forecasts. Default NULL. List object includes file path to previous runs and start date for SDA.}
 
-\item{forceRun}{Used to force job.sh files that were not run for ensembles in SDA (quick fix)}
+\item{pre_enkf_params}{Used for passing pre-existing time-series of process error into the current SDA runs to ignore the impact by the differences between process errors.}
 
-\item{keepNC}{Used for debugging issues. .nc files are usually removed after each year in the out folder. This flag will keep the .nc + .nc.var files for futher investigations.}
+\item{ensemble.samples}{list of ensemble parameters across PFTs. Default is NULL.}
 
-\item{control}{List of flags controlling the behaviour of the SDA. trace for reporting back the SDA outcomes, interactivePlot for plotting the outcomes after each step, 
-TimeseriesPlot for post analysis examination, BiasPlot for plotting the correlation between state variables, plot.title is the title of post analysis plots and debug mode allows for pausing the code and examinign the variables inside the function.}
+\item{control}{List of flags controlling the behavior of the SDA. 
+`TimeseriesPlot` for post analysis examination; 
+`OutlierDetection` decide if we want to execute the outlier detection each time after the model forecasting;
+`send_email` contains lists for sending email to report the SDA progress;
+`keepNC` decide if we want to keep the NetCDF files inside the out directory;
+`forceRun` decide if we want to proceed the Bayesian MCMC sampling without observations;
+`run_parallel` decide if we want to run the SDA under parallel mode for the `future_map` function;
+`MCMC.args` include lists for controling the MCMC sampling process (iteration, nchains, burnin, and nthin.).
+`merge_nc` determine if we want to merge all netCDF files across sites and ensembles.
+If it's set as `TRUE`, we will then combine all netCDF files into the `merged_nc` folder within the `outdir`.
+`execution` decide the way we want to execute model 
+including `local` ,where we execute the model locally;
+`qsub`, where we use the traditional `start_model_runs` function for submission;
+`qsub_parallel`, where we first combine jobs and submit them into the SCC.}
+
+\item{debias}{List: R list containing the covariance directory, the start time point, 
+and if we want to include the `residual.lag` as additional covariate.
+covariance directory should include GeoTIFF files named by year.
+start time point is numeric input which decide when to start the debiasing feature.
+`residual.lag` is either TRUE or FALSE.}
+
+\item{...}{Additional arguments, currently ignored}
 }
 \value{
 NONE
 }
 \description{
-State Variable Data Assimilation: Ensemble Kalman Filter and Generalized ensemble filter. Check out SDA_control function for more details on the control arguments.
+Check out SDA_control function for more details on the control arguments.
+}
+\details{
+Restart mode:  Basic idea is that during a restart (primary case envisioned
+as an iterative forecast), a new workflow folder is created and the previous
+forecast for the start_time is copied over. During restart the initial run
+before the loop is skipped, with the info being populated from the previous
+run. The function then dives right into the first Analysis, then continues
+on like normal.
 }
 \author{
-Michael Dietze and Ann Raiho \email{dietze@bu.edu}
+Michael Dietze, Ann Raiho and Alexis Helgeson \email{dietze@bu.edu}
 }

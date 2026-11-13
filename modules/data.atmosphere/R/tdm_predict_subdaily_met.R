@@ -30,26 +30,27 @@
 ##' @param ens.labs - vector containing the labels (suffixes) for each ensemble member; this allows you to add to your 
 ##'                   ensemble rather than overwriting with a default naming scheme
 ##' @param resids - logical stating whether to pass on residual data or not
-##' @param adjust.pr - adjustment factor fore preciptiation when the extracted values seem off
+##' @param adjust.pr - adjustment factor fore precipitation when the extracted values seem off
 ##' @param force.sanity - (logical) do we force the data to meet sanity checks?                             
 ##' @param sanity.tries - how many time should we try to predict a reasonable value before giving up?  We don't want to end up in an infinite loop
 ##' @param overwrite logical: replace output file if it already exists?
 ##' @param verbose logical: should \code{\link[ncdf4:ncdf4-package]{ncdf4}} functions print debugging information as they run?
 ##' @param print.progress - print the progress bar?
 ##' @param seed - manually set seed for results to be reproducible
+##' @param ... further arguments, currently ignored
+##'
 ##' @export
 ##' @examples
 ##' \dontrun{
-##' library(PEcAn.data.atmosphere)
-##' outfolder = '~/Downscaled_GCM'
-##' in.path = '~/raw_GCM'
-##' in.prefix = 'GFDL'
-##' lm.models.base = 'sf_scratch/US-WCr'
-##' dat.train_file = 'Training_data/US-WCr_dat.train.nc'
-##' start_date = '2010-01-01'
-##' end_date = '2014-12-31'
-##' cores.max = 12
-##' n.ens = 3}
+##'   predict_subdaily_met(
+##'     outfolder = "~/Downscaled_GCM",
+##'     in.path = "~/raw_GCM",
+##'     in.prefix = "GFDL",
+##'     path.train = "~/Training_data",
+##'     lm.models.base = "sf_scratch/US-WCr",
+##'     ens.labs = 1:3
+##'   )
+##' }
 # -----------------------------------
 #----------------------------------------------------------------------
 # Begin Script

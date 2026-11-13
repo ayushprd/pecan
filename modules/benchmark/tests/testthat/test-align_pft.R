@@ -1,16 +1,21 @@
 
 context("align_pft")
 
-con <- PEcAn.DB::db.open(PEcAn.DB::get_postgres_envvars(
+con <- tryCatch(
+  PEcAn.DB::db.open(PEcAn.DB::get_postgres_envvars(
     host = "localhost",
     user = "bety",
-    password = "bety"))
+    password = "bety")),
+  error = function(e) NULL)
+if (is.null(con)) {
+  skip("Can't connect to a BETY database. Skipping test.")
+}
 teardown(PEcAn.DB::db.close(con))
 
 observation_one <- c("AMCA3", "AMCA3", "AMCA3", "AMCA3")
 observation_two <- c("a", "b", "a", "a")
 format_one <- "species_USDA_symbol"
-format_two <- "plant_funtional_type"
+format_two <- "plant_functional_type"
 
 table <- data.frame(
   plant_functional_type_one = c("AMCA3", "AMCA3", "ARHY", "ARHY"),

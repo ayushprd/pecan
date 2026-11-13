@@ -1,13 +1,3 @@
-#-------------------------------------------------------------------------------
-# Copyright (c) 2012 University of Illinois, NCSA.
-# All rights reserved. This program and the accompanying materials
-# are made available under the terms of the 
-# University of Illinois/NCSA Open Source License
-# which accompanies this distribution, and is available at
-# http://opensource.ncsa.illinois.edu/license.html
-#-------------------------------------------------------------------------------
-
-## -------------------------------------------------------------------------------------------------#
 ##' Writes a config file for Maespa
 ##'
 ##' Requires a pft xml object, a list of trait values for a single model run,
@@ -16,7 +6,7 @@
 ##' @name write.config.MAESPA
 ##' @title Write MAESPA configuration files
 ##' @param defaults list of defaults to process
-##' @param trait.samples vector of samples for a given trait
+##' @param trait.values vector of samples for a given trait
 ##' @param settings list of settings from pecan settings file
 ##' @param run.id id of run
 ##' @return configuration file for MAESPA for given run
@@ -25,19 +15,15 @@
 ##-------------------------------------------------------------------------------------------------#
 write.config.MAESPA <- function(defaults, trait.values, settings, run.id) {
 
-  if(!require("Maeswrap")){
-    logger.severe("The Maeswrap package is not installed. 
+  if(!requireNamespace("Maeswrap", quietly = TRUE)){
+    PEcAn.logger::logger.severe("The Maeswrap package is not installed.
                   Please consult PEcAn documentation for install notes:
-                  https://pecanproject.github.io/pecan-documentation/master/pecan-models.html#maespa")
+                  https://pecanproject.github.io/pecan-documentation/latest/pecan-models.html#maespa")
   }
   
   # find out where to write run/ouput
   rundir <- file.path(settings$host$rundir, as.character(run.id))
   outdir <- file.path(settings$host$outdir, as.character(run.id))
-  if (is.null(settings$host$qsub) && (settings$host$name == "localhost")) {
-    rundir <- file.path(settings$rundir, as.character(run.id))
-    outdir <- file.path(settings$modeloutdir, as.character(run.id))
-  }
   #-----------------------------------------------------------------------
   # create launch script (which will create symlink)
   if (!is.null(settings$model$jobtemplate) && file.exists(settings$model$jobtemplate)) {

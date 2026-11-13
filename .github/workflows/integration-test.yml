@@ -1,0 +1,44 @@
+name : Integration Tests
+on :
+  # allow manual triggering
+  workflow_dispatch:
+
+  schedule:
+    # run Thursday 4:30 AM UTC
+  - cron: '30 4 * * 4'
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      PGHOST: postgres
+
+    services:
+      postgres:
+        image: mdillon/postgis:9.5
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+
+    container:
+      image: pecan/base:develop
+
+    steps:
+    - name: Checkout source code
+      uses: actions/checkout@v4
+
+    # initialize database
+    - name: db setup
+      uses: docker://pecan/db:ci
+
+    - name: Run tests
+      run: |
+        for FILE in modules/data.atmosphere/inst/integrationTests/*; do
+          if echo "$FILE" | grep -q "ERA5"; then
+            echo "Skipping file : $FILE"
+          else
+            Rscript "$FILE"
+          fi
+        done
+
+    - name: Run modular pipeline integration test
+      run: Rscript modules/uncertainty/inst/integrationTests/test.modular.chain.R

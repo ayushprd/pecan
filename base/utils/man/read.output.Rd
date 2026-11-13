@@ -7,14 +7,14 @@
 read.output(
   runid,
   outdir,
-  start.year = NA,
-  end.year = NA,
+  start.year = NULL,
+  end.year = NULL,
   variables = "GPP",
   dataframe = FALSE,
   pft.name = NULL,
   ncfiles = NULL,
   verbose = FALSE,
-  print_summary = TRUE
+  print_summary = FALSE
 )
 }
 \arguments{
@@ -26,7 +26,7 @@ Can be omitted if \code{ncfiles} is set.}
 
 \item{start.year, end.year}{first and last year of output to read.
 Specify as a date-time (only the year portion is used) or as a
-four-digit number or string. If \code{NA}, reads all years found in
+four-digit number or string. If \code{NULL}, reads all years found in
 \code{outdir}.}
 
 \item{variables}{Character vector of variables to be read from
@@ -52,8 +52,9 @@ variable is read, as well as all NetCDF diagnostics (from
 \code{verbose} argument to, e.g., \code{\link[ncdf4:nc_open]{ncdf4::nc_open()}}) (default =
 \code{FALSE}).}
 
-\item{print_summary}{Logical. If \code{TRUE} (default), calculate and
-print a summary of the means of each variable for each year.}
+\item{print_summary}{Logical. If \code{TRUE}, calculate and
+print a summary of the means of each variable for each year.
+Defaults to \code{FALSE}.}
 }
 \value{
 If \code{dataframe = FALSE}, a vector of output variables. If
@@ -73,7 +74,8 @@ Carbon fluxes: GPP, NPP, NEE, TotalResp, AutoResp, HeteroResp,
 DOC_flux, Fire_flux, and Stem (Stem is specific to the BioCro model)
 and Water fluxes: Evaporation (Evap), Transpiration (TVeg),
 surface runoff (Qs), subsurface runoff (Qsb), and rainfall (Rainf).
-For more details, see the \href{http://nacp.ornl.gov/MsTMIP_variables.shtml}{MsTMIP variables}
+
+For more details, see the \href{https://web.archive.org/web/20260106081010/https://nacp-prod.ornl.gov/MsTMIP_variables.shtml}{MsTMIP variables}
 documentation.
 }
 \author{

@@ -3,21 +3,26 @@
 ##' @export
 ##'
 ##' @param settings pecan settings list
-##' @param dbfiles where to write files
-##' @param overwrite whether to force ic_process to proceed
+##' @param input Taken from settings$run$inputs. This should include id, path, and source
+##' @param dir settings$database$dbfiles
+##' @param overwrite Default = FALSE. whether to force ic_process to proceed
+##'
 ##' @author Istem Fer, Hamze Dokoohaki
 ic_process <- function(settings, input, dir, overwrite = FALSE){
 
 
   #--------------------------------------------------------------------------------------------------#
   # Extract info from settings and setup
-  site       <- settings$run$site
-  model      <- settings$model$type
-  host       <- settings$host
-  dbparms    <- settings$database
+  site <- settings$run$site
+  model <- list(
+    type = settings$model$type,
+    id = settings$model$id
+  )
+  host <- settings$host
+  dbparms <- settings$database
 
   # Handle IC Workflow locally
-  if(host$name != "localhost"){
+  if (host$name != "localhost") {
     host$name <- "localhost"
     dir       <- settings$database$dbfiles
   }
@@ -43,19 +48,33 @@ ic_process <- function(settings, input, dir, overwrite = FALSE){
 
   # set up bety connection
   con <- PEcAn.DB::db.open(dbparms$bety)
-  on.exit(db.close(con), add = TRUE)
+  on.exit(PEcAn.DB::db.close(con), add = TRUE)
 
-  latlon <- PEcAn.data.atmosphere::db.site.lat.lon(site$id, con = con)
+  #grab site lat and lon info
+
+  # check if site metadata is available in the settings$run$site
+  if (isTRUE(nzchar(site$lat)) && isTRUE(nzchar(site$lon))) {
+    # if lat and lon are available, use them directly
+    latlon <- data.frame(lat = site$lat, lon = site$lon)
+  } else {
+    # otherwise, query the site information from the database
+    latlon <- PEcAn.DB::query.site(site$id, con = con)[c("lat", "lon")]
+  }
+
   # setup site database number, lat, lon and name and copy for format.vars if new input
-  new.site <- data.frame(id = as.numeric(site$id),
-                         lat = latlon$lat,
-                         lon = latlon$lon)
+  new.site <- list(
+    id = site$id,
+    lat = latlon$lat,
+    lon = latlon$lon,
+    name = site$name
+  )
 
-  new.site$name <- settings$run$site$name
-
-
-  str_ns <- paste0(new.site$id %/% 1e+09, "-", new.site$id %% 1e+09)
-
+  if (is.numeric(new.site$id) && isTRUE(new.site$id > 1e9)) {
+    # Assume this is a BETYdb id, condense for readability
+    str_ns <- paste0(new.site$id %/% 1e+09, "-", new.site$id %% 1e+09)
+  } else {
+    str_ns <- as.character(site$id)
+  }
 
   outfolder <- file.path(dir, paste0(input$source, "_site_", str_ns))
 
@@ -87,22 +106,40 @@ ic_process <- function(settings, input, dir, overwrite = FALSE){
     settings$run$inputs[['poolinitcond']]$path <- newfile
 
     return(settings)
-  }else{
-
+  }else if (input$source == "NEON_veg"){
+    #For debugging purposes I am hard coding in the start and end dates, will revisit and adjust once extract_NEON_veg is working within ic_process
+    start_date = as.Date(input$startdate)
+    end_date = as.Date(input$enddate)
+    # start_date = as.Date("2020-01-01")
+    # end_date = as.Date("2021-09-01")
+    #Note the start and end dates for ICs are not the same as those for the forecast runs
+    #please check out NEON products DP1.10098.001 for your desired site to check data availability before setting start and end dates
+  }else if(!is.null(input$startdate) && !is.null(input$enddate)){
+    start_date <- as.Date(input$startdate)
+    end_date <- as.Date(input$enddate)
+  } else{
+   
    query      <- paste0("SELECT * FROM inputs where id = ", input$id)
-   input_file <- db.query(query, con = con)
+   input_file <- PEcAn.DB::db.query(query, con = con) 
    start_date <- input_file$start_date
    end_date   <- input_file$end_date
 
   }
+  
   # set up host information
-  machine.host <- ifelse(host == "localhost" || host$name == "localhost", PEcAn.remote::fqdn(), host$name)
-  machine <- db.query(paste0("SELECT * from machines where hostname = '", machine.host, "'"), con)
-
+  if (host$name == "localhost") {
+    machine.host <- PEcAn.remote::fqdn()
+  } else {
+    machine.host <- host$name
+  }
+  machine <- PEcAn.DB::db.query(paste0("SELECT * from machines where hostname = '", machine.host, "'"), con)
+  
   # retrieve model type info
-  if(is.null(model)){
-    modeltype_id <- db.query(paste0("SELECT modeltype_id FROM models where id = '", settings$model$id, "'"), con)[[1]]
-    model <- db.query(paste0("SELECT name FROM modeltypes where id = '", modeltype_id, "'"), con)[[1]]
+  if(isTRUE(nzchar(settings$model$name))){
+    model$name <- settings$model$name
+  } else {
+    modeltype_id <- PEcAn.DB::db.query(paste0("SELECT modeltype_id FROM models where id = '", model$id, "'"), con)[[1]]
+    model$name <- PEcAn.DB::db.query(paste0("SELECT name FROM modeltypes where id = '", modeltype_id, "'"), con)[[1]]
   }
 
 
@@ -113,9 +150,10 @@ ic_process <- function(settings, input, dir, overwrite = FALSE){
   # but we might still want an ensemble from a single source, so need a check accordinly
   # best pass a flag (<ensemble.source>TRUE<\ensemble.source>) if that's the case, omit the flag otherwise
   # currently downloading/reading in different ensemble members is not implemented,
-  # then we'll need to pass pattern, ensemble etc to convert.input
-  nsource <- ifelse(!is.null(input$ensemble.source) & !is.null(input$ensemble), as.numeric(input$ensemble), 1)
+  # then we'll need to pass pattern, ensemble etc to convert_input
 
+  nsource <- ifelse(!is.null(input$ensemble), as.numeric(input$ensemble), 1)
+  
 #--------------------------------------------------------------------------------------------------#
   # Load/extract + match species module
 
@@ -139,7 +177,6 @@ ic_process <- function(settings, input, dir, overwrite = FALSE){
 
 #--------------------------------------------------------------------------------------------------#
   # Sampling/ensemble module
-
   if (!is.null(getveg.id) & !is.null(input$ensemble) & is.null(putveg.id)) {
 
     ctr <- 1
@@ -176,8 +213,7 @@ ic_process <- function(settings, input, dir, overwrite = FALSE){
                                        outfolder  = outfolder,
                                        n.ensemble = i,
                                        dir        = dir,
-                                       machine    = machine,
-                                       model      = model,
+                                       model      = model$name,
                                        start_date = start_date,
                                        end_date   = end_date,
                                        new_site   = new.site,
@@ -193,7 +229,8 @@ ic_process <- function(settings, input, dir, overwrite = FALSE){
   if (!is.null(putveg.id)) {
 
     # extend the inputs list for ensemble members
-    settings_inputs <- lapply(seq_along(settings$run$inputs), function(x) rep(settings$run$inputs[[x]], each = length((putveg.id))))
+    #settings_inputs <- lapply(seq_along(settings$run$inputs), function(x) rep(settings$run$inputs[[x]], each = length((putveg.id))))
+    settings_inputs <- settings$run$inputs
 
     # make sure all sublists are grouped and renamed to have unique tags, e.g.:
     # <id>
@@ -206,24 +243,24 @@ ic_process <- function(settings, input, dir, overwrite = FALSE){
     #          ...
     #   <pathN>...</pathN>
     # </path>
-    settings_inputs <- lapply(seq_along(settings_inputs), function(x){
-      tmp.list <- settings_inputs[[x]]
-      sub_names <- names(settings$run$inputs[[x]])
-      names(settings_inputs[[x]]) <- paste0(names(settings_inputs[[x]]), rep(seq_along(putveg.id), length(settings$run$inputs[[x]])))
-      tmp.list  <- lapply(seq_along(sub_names), function(v) return(settings_inputs[[x]][names(tmp.list) == sub_names[v]]))
-      names(tmp.list) <- sub_names
-      if(is.null(tmp.list$path)) tmp.list$path <- list()
-      return(tmp.list)
-    })
-
-    names(settings_inputs) <- names(settings$run$inputs)
-
+    # # settings_inputs <- lapply(seq_along(settings_inputs), function(x){
+    # #   tmp.list <- settings_inputs[[x]]
+    # #   sub_names <- names(settings$run$inputs[[x]])
+    # #   names(settings_inputs[[x]]) <- paste0(names(settings_inputs[[x]]), rep(seq_along(putveg.id), length(settings$run$inputs$IC[[x]])))
+    # #   tmp.list  <- lapply(seq_along(sub_names), function(v) return(settings_inputs[[x]][names(tmp.list) == sub_names[v]]))
+    # #   names(tmp.list) <- sub_names
+    # #   if(is.null(tmp.list$path)) tmp.list$path <- list()
+    # #   return(tmp.list)
+    # # })
+    # 
+    # # names(settings_inputs) <- names(settings$run$inputs)
+    # 
     for(i in seq_along(putveg.id)){
-
-      model_file <- db.query(paste("SELECT * from dbfiles where container_id =", putveg.id[[i]], "and machine_id =", machine$id), con)
-
-      # now that we don't have multipasses, convert.input only inserts 1st filename
-      # do we want to change it in convert.inputs such that it loops over the dbfile.insert?
+      
+      model_file <- PEcAn.DB::db.query(paste("SELECT * from dbfiles where container_id =", putveg.id[[i]], "and machine_id =", machine$id), con)
+      
+      # now that we don't have multipasses, convert_input only inserts 1st filename
+      # do we want to change it in convert_inputs such that it loops over the dbfile.insert?
       path_to_settings <- file.path(model_file[["file_path"]], model_file[["file_name"]])
       settings_inputs[[input$output]][['path']][[paste0('path', i)]] <- path_to_settings
 
@@ -239,23 +276,47 @@ ic_process <- function(settings, input, dir, overwrite = FALSE){
         # Copy to remote, update DB and change paths if needed
         if (settings$host$name != "localhost") {
 
-          folder_dir <- paste0(input$source, "_site_", str_ns, "/", input$source, "_ens", i, ".", lubridate::year(start_date))
+          folder_dir <- paste0(
+            input$source, "_site_", str_ns, "/",
+            input$source, "_ens", i, ".",
+            lubridate::year(start_date))
           remote_dir <- file.path(settings$host$folder, folder_dir)
 
           # copies css
           css_file <- settings_inputs[["css"]][['path']][[paste0('path', i)]]
-          PEcAn.remote::remote.copy.update(putveg.id[[i]], remote_dir, local_file_path = css_file, host = settings$host, con = con)
-          settings_inputs[["css"]][['path']][[paste0('path', i)]] <- file.path(remote_dir, basename(css_file))
+          remote.copy.update(
+            input_id = putveg.id[[i]],
+            remote_dir = remote_dir,
+            local_file_path = css_file,
+            host = settings$host,
+            con = con)
+          settings_inputs[["css"]][['path']][[paste0('path', i)]] <- file.path(
+            remote_dir,
+            basename(css_file))
 
-          # pss
+          # pss 
           pss_file <- settings_inputs[["pss"]][['path']][[paste0('path', i)]]
-          PEcAn.remote::remote.copy.update(putveg.id[[i]], remote_dir, local_file_path = pss_file, host = settings$host, con = con)
-          settings_inputs[["pss"]][['path']][[paste0('path', i)]] <- file.path(remote_dir, basename(pss_file))
+          remote.copy.update(
+            input_id = putveg.id[[i]],
+            remote_dir = remote_dir,
+            local_file_path = pss_file,
+            host = settings$host,
+            con = con)
+          settings_inputs[["pss"]][['path']][[paste0('path', i)]] <- file.path(
+            remote_dir,
+            basename(pss_file))
 
           # site
           site_file <- settings_inputs[["site"]][['path']][[paste0('path', i)]]
-          PEcAn.remote::remote.copy.update(putveg.id[[i]], remote_dir, local_file_path = site_file, host = settings$host, con = con)
-          settings_inputs[["site"]][['path']][[paste0('path', i)]] <- file.path(remote_dir, basename(site_file))
+          remote.copy.update(
+            input_id = putveg.id[[i]],
+            remote_dir = remote_dir,
+            local_file_path = site_file,
+            host = settings$host,
+            con = con)
+          settings_inputs[["site"]][['path']][[paste0('path', i)]] <- file.path(
+            remote_dir,
+            basename(site_file))
 
         }
       }

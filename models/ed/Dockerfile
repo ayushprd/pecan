@@ -1,17 +1,16 @@
 # this needs to be at the top, what version are we building
 ARG IMAGE_VERSION="latest"
+ARG PARENT_IMAGE="pecan/models"
 
 # ----------------------------------------------------------------------
 # BUILD MODEL BINARY
 # ----------------------------------------------------------------------
-FROM pecan/models:${IMAGE_VERSION} as model-binary
+FROM ${PARENT_IMAGE}:${IMAGE_VERSION} AS model-binary
 
 # Some variables that can be used to set control the docker build
 ARG MODEL_VERSION="2.2.0"
 ARG BINARY_VERSION="2.2"
-
-# specify fortran compiler
-ENV FC_TYPE=GNU
+ARG ED2_KIND=E
 
 # install dependencies
 RUN apt-get update \
@@ -20,25 +19,25 @@ RUN apt-get update \
        curl \
        gfortran \
        git \
-       libhdf5-dev \
-       libopenmpi-dev \
+       libhdf5-openmpi-dev  \
+       libblas-dev \
+       liblapack-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # download, unzip and build ed2
 WORKDIR /src
-RUN git -c http.sslVerify=false clone https://github.com/EDmodel/ED2.git \
-    && cd ED2/ED/build \
-    && curl -o make/include.mk.VM http://isda.ncsa.illinois.edu/~kooper/EBI/include.mk.opt.`uname -s` \
+RUN git -c http.sslVerify=false clone https://github.com/EDmodel/ED2.git
+RUN cd ED2/ED/build \
     && if [ "${MODEL_VERSION}" != "git" ]; then git checkout "v.${MODEL_VERSION}"; fi \
-    && ./install.sh -g -p VM \
-    && mv /src/ED2/ED/build/ed_${BINARY_VERSION}-opt /src/ED2/ED/build/ed 
+    && ./install.sh -k ${ED2_KIND} -g -p docker.gnu \
+    && if [ -e ed_*-opt ]; then mv ed_*-opt ed; else mv ed_*-dbg ed; fi
 
 ########################################################################
 
 # ----------------------------------------------------------------------
 # BUILD PECAN FOR MODEL
 # ----------------------------------------------------------------------
-FROM pecan/models:${IMAGE_VERSION}
+FROM ${PARENT_IMAGE}:${IMAGE_VERSION}
 
 # ----------------------------------------------------------------------
 # INSTALL MODEL SPECIFIC PIECES
@@ -46,12 +45,13 @@ FROM pecan/models:${IMAGE_VERSION}
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       libopenmpi3 \
+       libhdf5-openmpi-fortran-102t64 \
+       libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # INSTALL PEcAn.ED2
 #COPY models/ed2 /src/ed/
-#RUN Rscript --vanilla -e  "devtools::install_local('/src/ed'); q(status=as.integer(!'PEcAn.ED2' %in% installed.packages()))" 
+#RUN Rscript --vanilla -e  "devtools::install_local('/src/ed'); q(status=as.integer(!'PEcAn.ED2' %in% installed.packages()))"
 
 # ----------------------------------------------------------------------
 # SETUP FOR SPECIFIC MODEL

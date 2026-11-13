@@ -12,7 +12,8 @@ Read.IC.info.BADM(lat, long)
 \item{long}{numeric longitude}
 }
 \value{
-a dataframe with 7 columns of Site, Variable, Date, Organ, AGB, soil_organic_carbon_content, litter_carbon_content. Variable in the return objext refers to the what this value was called inside BADM database.
+a dataframe with 7 columns of Site, Variable, Date, Organ, AGB, soil_organic_carbon_content, litter_carbon_content.
+  Variable in the return object refers to what this value was called inside BADM database.
 }
 \description{
 This function returns a dataframe of plant biomass, root and soil carbon for a set of lat and long coordinates.
@@ -21,7 +22,5 @@ If no data found in the BADM database for the given lat/longs eco-regions, then 
 All the variables are also converted to kg/m^2.
 }
 \examples{
-\dontrun{
-  badm_test <- Read.IC.info.BADM(45.805925,-90.07961)
-}
+badm_test <- Read.IC.info.BADM(45.805925,-90.07961)
 }

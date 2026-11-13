@@ -1,0 +1,73 @@
+test_that("unit conversions", {
+  expect_equal(ud_convert(4, "in", "cm"), 10.16)
+  expect_equal(ud_convert(23, "degC", "K"), 296.15)
+  expect_equal(ud_convert(6, "days", "seconds"), 518400)
+  expect_equal(ud_convert(32, "hour", "seconds"), 115200)
+  expect_equal(ud_convert(15, "days", "hour"), 360)
+  expect_equal(ud_convert(-7, "ppm", "mol/mol"), -7e-06)
+})
+
+test_that("unit conversion invariants", {
+  expect_equal(ud_convert(1, "g", "g"), 1) 
+  expect_equal(ud_convert(0, "g", "kg"), 0)
+  expect_equal(ud_convert(Inf, "g", "kg"), Inf)
+})
+
+test_that("incompatible units", {
+  expect_error(ud_convert(1, "miles", "grams"))
+  expect_error(ud_convert(1, "radians", "degC"))
+  expect_error(ud_convert(1, "in", "grams"))
+})
+
+test_that("output is type numeric and not class \"units\"", {
+  x <- ud_convert(23, "degC", "K")
+  testthat::expect_failure(expect_s3_class(x, "units"))
+  testthat::expect_type(x, "double")
+
+})
+
+test_that("ud_convert() handles difftime", {
+  x <- ud_convert(as.difftime("12:00:00"), u1 = "hours", u2 = "days")
+  expect_is(x, "numeric")
+  expect_equal(x, 0.5)
+})
+
+test_that("ud_convert() warns with wrong input units for difftime", {
+  expect_warning(ud_convert(as.difftime("12:00:00"), u1 = "years", u2 = "minutes"))
+  #should still error if units are not convertible
+  expect_error(ud_convert(as.difftime("12:00:00"), u1 = "kilograms", u2 = "minutes"))
+})
+
+test_that("model-specific pool conversions", {
+  # DALEC/SIPNET C pools
+  expect_equal(ud_convert(100, "g/m2", "kg/m2"), 0.1)
+  # GDAY pools
+  expect_equal(ud_convert(10, "Mg/ha", "kg/m2"), 1)
+})
+
+test_that("model-specific flux conversions", {
+  # DALEC/SIPNET C fluxes
+  expect_equal(ud_convert(86400, "g/m2/d", "kg/m2/s"), 0.001, tolerance = 1e-10)
+})
+
+test_that("photosynthesis parameters", {
+  # Photosynthesis energy parameters
+  expect_equal(ud_convert(1000, "J/mol", "kJ/mol"), 1)
+})
+
+test_that("ud_convert handles vector inputs", {
+  expect_equal(ud_convert(c(0, 10, 100), "degC", "K"), c(273.15, 283.15, 373.15))
+  x <- seq(0, 100, length.out = 1000)
+  result <- ud_convert(x, "cm", "m")
+  expect_equal(result, x / 100)
+  expect_length(result, 1000)
+})
+
+test_that("ud_convert handles NA in vectors", {
+  result <- ud_convert(c(1, NA, 3), "m", "cm")
+  expect_equal(result, c(100, NA, 300))
+})
+
+test_that("ud_convert handles integer input", {
+  expect_equal(ud_convert(1L, "m", "cm"), 100)
+})

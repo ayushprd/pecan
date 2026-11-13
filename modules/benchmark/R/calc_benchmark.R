@@ -1,39 +1,42 @@
-##-------------------------------------------------------------------------------------------------#
-##' For each benchmark id, calculate metrics and update benchmarks_ensemble_scores
-##'  
-##' @name calc_benchmark 
-##' @title Calculate benchmarking statistics
-##' @param bm.ensemble object, either from create_BRR or start.bm.ensemle
-##' @param bety database connection
-##' @export 
-##' 
-##' @author Betsy Cowdery 
-##' @importFrom dplyr tbl filter rename collect select  
+#' Calculate benchmarking statistics
+#'
+#' For each benchmark id, calculate metrics and update benchmarks_ensemble_scores
+#'
+#' @param settings settings object describing the run to calculate
+#' @param bety database connection
+#' @param start_year,end_year time range to read. If NA, these are taken from `settings`
+#' @export
+#'
+#' @author Betsy Cowdery
 calc_benchmark <- function(settings, bety, start_year = NA, end_year = NA) {
-  
+
   # run.score <- run.success.check(settings)
-  
+
   if("benchmarking" %in% names(settings)){
-    
+
     # If "run" is in the list of benchmarking metrics, add run.score record to the database
     # How are we dealing with ensemble runs? This is still an issue that has not been dealt with elsewhere in the code. 
     # For now this design only works with sigle run ensembles. 
-    
+
     ##### This is where calc_benchmarks originally started 
-    
+
     # Update benchmarks_ensembles and benchmarks_ensembles_scores tables
-    
-    ensemble <- tbl(bety,'ensembles') %>% filter(workflow_id == settings$workflow$id) %>% collect()
-    
+
+    ensemble <- dplyr::tbl(bety,'ensembles') %>%
+      dplyr::filter(.data$workflow_id == settings$workflow$id) %>%
+      dplyr::collect()
+
     # Retrieve/create benchmark ensemble database record
-    bm.ensemble <- tbl(bety,'benchmarks_ensembles') %>% 
-      filter(reference_run_id == settings$benchmarking$reference_run_id,
-             ensemble_id %in% ensemble$id,  # ensemble$id has more than one element
-             model_id == settings$model$id) %>%
-      collect()
-    
+    bm.ensemble <- dplyr::tbl(bety,'benchmarks_ensembles') %>%
+      dplyr::filter(
+        .data$reference_run_id == settings$benchmarking$reference_run_id,
+        .data$ensemble_id %in% ensemble$id,  # ensemble$id has more than one element
+        .data$model_id == settings$model$id
+      ) %>%
+      dplyr::collect()
+
     if(dim(bm.ensemble)[1] == 0){
-      bm.ensemble <- db.query(paste0("INSERT INTO benchmarks_ensembles",
+      bm.ensemble <- PEcAn.DB::db.query(paste0("INSERT INTO benchmarks_ensembles",
                                      "(reference_run_id, ensemble_id, model_id, ",
                                      "user_id, citation_id)",
                                      "VALUES(",settings$benchmarking$reference_run_id,
@@ -58,16 +61,16 @@ calc_benchmark <- function(settings, bety, start_year = NA, end_year = NA) {
     # This is could become problematic if previous benchmarks were
     # calculated with multiple inputs, which would mean that all of that data 
     # would need to be loaded and aligned again. 
-    
-    bms <- tbl(bety,'benchmarks') %>% dplyr::rename(benchmark_id = id) %>% 
-      left_join(tbl(bety, "benchmarks_benchmarks_reference_runs"), by="benchmark_id") %>% 
-      filter(reference_run_id == settings$benchmarking$reference_run_id) %>% 
-      select(one_of("benchmark_id", "input_id", "site_id", "variable_id", "reference_run_id")) %>%
-      collect() %>%
-      filter(benchmark_id %in% unlist(settings$benchmarking[which(names(settings$benchmarking) == "benchmark_id")]))
-    
+
+    bms <- dplyr::tbl(bety,'benchmarks') %>% dplyr::rename(benchmark_id = "id") %>%
+      dplyr::left_join(dplyr::tbl(bety, "benchmarks_benchmarks_reference_runs"), by="benchmark_id") %>%
+      dplyr::filter(.data$reference_run_id == settings$benchmarking$reference_run_id) %>%
+      dplyr::select(dplyr::one_of("benchmark_id", "input_id", "site_id", "variable_id", "reference_run_id")) %>%
+      dplyr::collect() %>%
+      dplyr::filter(.data$benchmark_id %in% unlist(settings$benchmarking[which(names(settings$benchmarking) == "benchmark_id")]))
+
     var.ids <- bms$variable_id
-    
+
     # --------------------------------------------------------------------------------------------- #
     # Determine how many data sets inputs are associated with the benchmark id's
     # bm.ids are split up in to groups according to their input data. 
@@ -94,25 +97,32 @@ calc_benchmark <- function(settings, bety, start_year = NA, end_year = NA) {
       
       if(is.na(start_year)) start_year <- lubridate::year(settings$run$start.date)
       if(is.na(end_year))   end_year <- lubridate::year(settings$run$end.date)
-      
-      obvs <- load_data(data.path, format, start_year = start_year, end_year = end_year, site, vars.used.index, time.row)
-      dat_vars <- format$vars$pecan_name  # IF : is this line redundant?
+
+      obvs <- load_data(
+        data.path,
+        format,
+        start_year = start_year,
+        end_year = end_year,
+        site,
+        vars.used.index,
+        time.row
+      )
       obvs_full <- obvs
 
       # ---- LOAD MODEL DATA ---- #
-      
-      #model_vars <- format$vars$pecan_name[-time.row]  # IF : what will happen when time.row is NULL? 
-      model_vars <- format$vars$pecan_name # time.row is NULL
-      # For example 'AmeriFlux.level2.h.nc' format (38) has time vars year-day-hour listed, 
+
+      var_idx <- seq_along(format$vars$pecan_name)
+      model_vars <- format$vars$pecan_name[!(var_idx %in% time.row)] # looks weird but works when time.row is NULL
+      # For example 'AmeriFlux.level2.h.nc' format (38) has time vars year-day-hour listed,
       # but storage type column is empty and it should be because in load_netcdf we extract
       # the time from netcdf files using the time dimension we can remove time variables from
       # this format's related variables list or can hardcode 'time.row=NULL' in load_x_netcdf function
-      read.model <- read.output(runid = basename(model_run), 
-                                outdir = model_run, 
-                                start.year = start_year, 
+      read.model <- PEcAn.utils::read.output(runid = basename(model_run),
+                                outdir = model_run,
+                                start.year = start_year,
                                 end.year = end_year,
                                 c("time", model_vars), dataframe = TRUE)
-      
+
       model <- read.model
       vars.used.index <- which(format$vars$pecan_name %in% names(model)[!names(model) == "time"])
       model_full <- model
@@ -127,17 +137,17 @@ calc_benchmark <- function(settings, bety, start_year = NA, end_year = NA) {
       # Loop over benchmark ids
       # i = 1 # for testing
       for (i in seq_along(bm.ids)) {
-        bm <- db.query(paste("SELECT * from benchmarks where id =", bm.ids[i]), bety)
-        metrics <- db.query(paste("SELECT m.name, m.id from metrics as m", 
+        bm <- PEcAn.DB::db.query(paste("SELECT * from benchmarks where id =", bm.ids[i]), bety)
+        metrics <- PEcAn.DB::db.query(paste("SELECT m.name, m.id from metrics as m", 
                                   "JOIN benchmarks_metrics as b ON m.id = b.metric_id", 
                                   "WHERE b.benchmark_id = ", bm.ids[i]), bety)
         #"run" metric needs to be removed from metrics so it isn't computed twice
-        var <- filter(format$vars, variable_id == bm$variable_id)[, "pecan_name"]
+        var <- dplyr::filter(format$vars, .data$variable_id == bm$variable_id)[, "pecan_name"]
         var.list <- c(var.list, var)
         
-        obvs.calc <- obvs_full %>% select(., one_of(c("posix", var)))
+        obvs.calc <- obvs_full %>% dplyr::select(dplyr::one_of(c("posix", var)))
         obvs.calc[,var] <- as.numeric(obvs.calc[,var])
-        model.calc <- model_full %>% select(., one_of(c("posix", var)))
+        model.calc <- model_full %>% dplyr::select(dplyr::one_of(c("posix", var)))
         
         # Check that the variables actually got loaded, otherwise don't send to calc_metrics
         
@@ -157,23 +167,24 @@ calc_benchmark <- function(settings, bety, start_year = NA, end_year = NA) {
                                          bm_dir)
         
         for(metric.id in metrics$id){
-          metric.name <- filter(metrics,id == metric.id)[["name"]]
+          metric.name <- dplyr::filter(metrics,.data$id == metric.id)[["name"]]
           score <- out.calc_metrics[["benchmarks"]] %>% 
-            filter(metric == metric.name) %>% select(score)
+            dplyr::filter(.data$metric == metric.name) %>% 
+            dplyr::select(score)
           
           # Update scores in the database
           
-          score.entry <- tbl(bety, "benchmarks_ensembles_scores") %>%
-            filter(benchmark_id == bm.ids[i]) %>%
-            filter(benchmarks_ensemble_id == bm.ensemble$id) %>%
-            filter(metric_id == metric.id) %>% 
-            collect()
+          score.entry <- dplyr::tbl(bety, "benchmarks_ensembles_scores") %>%
+            dplyr::filter(.data$benchmark_id == bm.ids[i]) %>%
+            dplyr::filter(.data$benchmarks_ensemble_id == bm.ensemble$id) %>%
+            dplyr::filter(.data$metric_id == metric.id) %>% 
+            dplyr::collect()
           
           # If the score is already in the database, should check if it is the same as the calculated 
           # score. But this requires a well written regular expression since it can be matching text. 
           
           if(dim(score.entry)[1] == 0){
-            db.query(paste0(
+            PEcAn.DB::db.query(paste0(
               "INSERT INTO benchmarks_ensembles_scores",
               "(score, benchmarks_ensemble_id, benchmark_id, metric_id) VALUES ",
               "('",score,"',",bm.ensemble$id,", ",bm$id,",",metric.id,")"), bety)
@@ -186,9 +197,9 @@ calc_benchmark <- function(settings, bety, start_year = NA, end_year = NA) {
       }  #end loop over benchmark ids
       
       table.filename <- file.path(bm_dir, paste("benchmark.scores", var, bm.ensemble$ensemble_id, "pdf", sep = "."))
-      pdf(file = table.filename)
+      grDevices::pdf(file = table.filename)
       gridExtra::grid.table(do.call(rbind, results.list))
-      dev.off()
+      grDevices::dev.off()
       
       var.names <- c()
       for(k in seq_along(dat.list)){

@@ -1,0 +1,143 @@
+# PEcAn.SIPNET 1.10.0.9000
+
+* `write_segmented_configs.SIPNET` now merges consecutive segments with the same PFT to avoid unnecessary SIPNET restarts (#4129).
+* `write.config.SIPNET`: Fixed initial LAI being too low when `leaf_carbon_content` is read from an initial condition file (#4205).
+* `write.config.SIPNET` converted `stem_respiration_rate` and
+    `root_respiration_rate` to per day rates, but SIPNET reads `baseVegResp`
+    and `baseFineRootResp` as per year and divides by 365 itself, so both were
+    written 365x too low. They are now converted to per year.
+* `model2netcdf.SIPNET` now also writes `soil_organic_carbon_content`, the
+    soil carbon pool alone. `TotSoilCarb` is unchanged and still includes the
+    litter pool, so it is not comparable to a measured soil organic carbon
+    stock when the litter pool is on.
+* `model2netcdf.SIPNET` now names the time bounds variable `time_bnds` (the
+    CF convention, and the name `cdo` already produces when merging
+    sub-annual outputs) instead of `time_bounds`. `read_restart.SIPNET`
+    reads `time_bnds` and falls back to `time_bounds` for older outputs (#3303).
+* Added regression coverage for SIPNET event-JSON segmentation and segmented restart chaining (#4021).
+* `write.config.SIPNET` now maps the `leafNResorptionFrac` trait to its v2
+    parameter, so PFT supplied values reach the param file instead of
+    silently keeping the template default. Completes the nitrogen cycle
+    trait mappings alongside the existing `leafOnReallocFrac`.
+    `plantStorageNInit` is deliberately not trait mapped; it is an initial
+    condition, set from the IC layer like the other Init parameters.
+* For SIPNET v2, `write.config.SIPNET` now sets `plantStorageNInit` to the N
+    needed for one carbon-limited leaf flush, computed from the initialized
+    wood pool, instead of leaving the template value. With the nitrogen cycle
+    on, a zero initial storage N suppressed the first leaf-on event entirely
+    for vegetation initialized with standing wood (e.g. established orchards).
+    Sipnet takes the smaller of its carbon and nitrogen limiters, so sizing N
+    to the carbon-capped transfer removes the suppression without adding
+    surplus N. A `plantStorageNInit` supplied through the `IC` argument still
+    takes precedence, and zero-wood (annual) initializations still get 0.
+* More flexible handling of Sipnet "restart" files (checkpoints containing full
+  model state at the end of the run):
+    - New setting `settings$model$copy.restart` is a logical runtime flag
+      controlling whether to copy each run's `restart.out` to the output
+      directory at job completion or leave it in the run directory.
+    - New function `collect_restarts` works after the run and copies all the
+      `restart.out`s from an entire workflow run into a single directory,
+      for e.g. initializing follow-up workflows (#4110).
+    - The `collect_restarts()` function and the `copy.restart` flag work
+      independently of each other; point `collect_restarts()` at whichever of
+      `run/` or `out/` contains the restart files.
+* `write_segmented_configs.SIPNET` now subsets met files by day instead of
+  datetime to match the daily resolution of event files, and requires met files
+  to have a constant timestep (i.e. same number of rows every day). Enforcing
+  constant timesteps allowed major efficiency gains in the met splitting step,
+  which is in practice often the slowest step of a segmented run.
+* Improvements to the job.sh written by `write_segmented_configs`:
+  - Now places README.txt, segments.csv, and the full log files from each
+    segment, into the outdir (as was already done for one-segment runs).
+  - Now respects `settings$model$delete.raw` by deleting sipnet.out from segment
+    dirs as well as the from the job outdir
+  - No longer calls model2netcdf.SIPNET() inside each segment dir (it was
+    redundant with the whole-job netcdf output).
+  - Runs host setup and teardown steps once per job instead of once per segment.
+    This reduces duplicate computation and allows using these steps for
+    whole-rundir cleanups, e.g. `settings$model$postrun`  = "rm -rf @RUNDIR@".
+    This may be especially useful to keep file counts reasonable in workflows
+    with many crop changes (and hence many segment directories per site).
+  - Fixed incorrect run paths in the settings$host block passed to single segments
+* `model2netcdf.SIPNET` takes `LAI` from sipnet.out if present (which requires
+    Sipnet > v2.2). If it is not present, LAI is calculated as
+    `plantLeafC / leafCSpWt` as previously.
+* `split_inputs.SIPNET` now avoids internal time format conversions, giving a
+  substantial speedup and reduced memory use when processing multi-year files.
+  The speedup is especially large for files that have fixed line length,
+  constant time step, and all splits at day boundaries; for these the start and
+  end of the split can be calculated by byte offset and lines not in the subset
+  are never even read from the file.
+* `model2netcdf.SIPNET` now detects the number of timesteps per day by taking the maximum count across all days in the first simulation year, rather than reading only from day 1. This prevents a factor-of-N error in flux unit conversions when the first day of output is partial (fewer timesteps than a complete day) (#3624, #3989).
+* Fixed a unit error in model2netcdf.SIPNET's calculation of `GWBI` (kgC/m2/sec)
+    from `woodCreation` (actually gC/m2/timestep, was being treated as gC/m2/day).
+* `model2netcdf.SIPNET` now takes NPP directly from sipnet.out rather than repeat
+    Sipnet's internal calculation (as GPP - Ra) with identical results.
+* Updated README with a more complete model description and instructions for installing SIPNET (#3705)
+* Removed `tests/Rcheck_reference.log`, which was used to ignore historic check messages that have now been fixed.
+* Initial support for SIPNET v2.0, whose features include simplified input files,
+    simulation of management events, tracking of N cycle components, flooded soils, and anaerobic CH4 generation.
+* Breaking: `met2model.SIPNET` now writes 12-column clim files (as expected by Sipnet >= v2.0) by default.
+	To get the previously standard 14-column output, set `clim_format_version = "v1"`.
+* NITROGEN_CYCLE, LITTER_POOL, and ANAEROBIC enabled by default for SIPNET v2 runs.
+* `model2netcdf.SIPNET` now handles both V1 and v2 output header format (v2 has no Notes line; SIPNET #267).
+* Removed 13 obsolete v1 parameters from the v2 parameter template `template.param_v2` (microbeInit, qualityLeaf, etc.)
+  and added 16 new nitrogen cycle, anaerobic, and methane parameters.
+* Added nitrogen cycle (mineral_N, soil_organic_N, litter_N, N2O, N leaching, N fixation,
+  N uptake) and methane (CH4) output conversion to NetCDF in `model2netcdf.SIPNET`.
+* Fixed crash when `litterWater` column absent in v2 output (LITTER_WATER removed in v2).
+* `write.config.SIPNET` now validates runtime flag dependencies (NITROGEN_CYCLE requires
+  LITTER_POOL and ANAEROBIC) and guards v1 only parameters (litterWHC, litWaterDrainRate,
+  litterWFracInit, microbeInit, m_ballBerry) from being set when using v2 templates.
+* Removed workarounds for column naming bugs in output from long-outdated legacy
+  Sipnet version `sipnet.unk`.
+* Added trait to parameter mappings for nitrogen cycle parameters in `write.config.SIPNET`,
+  including tissue C:N ratios, N volatilization/leaching/resorption, fixation, and methane rates.
+* `segment_dataframe()` now returns an empty dataframe when date filtering removes all crop-cycle segments, instead of a single row with NA columns that caused downstream segment config errors (#4007).
+  
+
+# PEcAn.SIPNET 1.10.0
+
+## Added
+* `write.events.SIPNET()` generates SIPNET `events.in` files from an `events.json` file (#3623).
+* `met2model.SIPNET` now accepts argument `var.names`, listing which variables should be extracted from the file. If not provided, it extracts all variables in the file (#3563).
+
+## Removed
+* The `sipnet2datetime` function is no longer used anywhere and therefore has been removed (#3622).
+
+## Changed
+* Breaking: Renamed the setting used to pass soil and hydrology parameters. `write.config.SIPNET` previously read these from `settings$run$inputs$soilinitcond`, now `settings$run$inputs$soil_physics` to better reflect that these are state factors applicable to the whole run rather than initial conditions (Quianyu Li, #3406).
+* model2netcdf.SIPNET no longer writes separate `<year>.nc.var` files for every year of output. Use `PEcAn.utils::nc_write_varfiles()` to create these as needed (#3611).
+* Restart and met2model functions now print less to the console unless `verbose = TRUE` (#3544, #3563).
+
+## Fixed
+* `write.config.SIPNET` now checks more carefully whether an optional variable exists in an initial condition file before trying to read it, therefore printing fewer messages about (expectedly) missing variables (#3545).
+* When passed a vector of multiple input paths, `write.config.SIPNET` was choosing one at random; it now throws an error (Blesson Thomas, #3298). Note that a single input path per call has always been the intended usage; being passed many was a second bug in PEcAn.uncertainty that is also now fixed.
+* `model2netcdf.SIPNET` no longer assumes a constant value of `pecan_start_doy` across years, which lead to incorrect calculations of `sub_dates` and `sub_dates_cf` at year boundaries (@DongchenZ, #3622).
+* When phenology inputs contain missing values, `write.config.SIPNET` now tries to use an average across years for that site before falling back to fixed cross-site defaults (Quianyu Li, #3680).
+* `write.config.SIPNET` now adjusts soil water capacity to match the specified soil depth (#3634).
+* Fixed unit errors in `write.config.SIPNET` calculation of `leafCSpWt` and `Amax` (#3608, #3664).
+
+
+
+# PEcAn.SIPNET 1.9.0
+
+## License change
+* PEcAn.SIPNET is now distributed under the BSD three-clause license instead of the NCSA Open Source license.
+
+## Fixed
+
+* `met2model.SIPNET()` now stops with an error if the result contains missing values, which [are not allowed](https://github.com/PecanProject/sipnet/issues/38#issuecomment-2701749926) in SIPNET inputs (#3474).
+* `write.config.SIPNET()` now consults PFT trait definitions to decide whether to initialize LAI in the leaf-on or leaf-off state, instead of the previous hard-coded defaults (#3419). Specifically:
+	- a PFT with `fracLeafFall` > 0.5 will be treated as deciduous (previously hardcoded to deciduous for anything other than boreal conifers)
+	- deciduous PFTs will get laiInit=0 if the simulation start date is not between `leafOnDay` and `leafOffDay` (previously hardcoded to May through September)
+* The generated Sipnet run script (job.sh) now works correctly, including across machines, when met/input/output files are specified relative to the working directory (#3418). Absolute paths continue to work as always.
+
+# PEcAn.SIPNET 1.8.0
+
+* Support for all Sipnet variables in read_restart and write_restart, for integration with state data assimilation workflows
+
+# PEcAn.SIPNET 1.7.1
+
+* All changes in 1.7.1 and earlier were recorded in a single file for all of the PEcAn packages; please see 
+https://github.com/PecanProject/pecan/blob/v1.7.1/CHANGELOG.md for details.

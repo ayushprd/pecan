@@ -14,6 +14,7 @@
 #' @param format_name Species code format name (see details)
 #' @param bety BETY connection object
 #' @param translation_table Data frame with custom translation table (see details).
+#' @param ... additional arguments, currently ignored
 #' @return \code{data.frame} containing the following columns:
 #' \describe{
 #'  \item{\code{input_code}}{Character provided as input}
@@ -67,8 +68,8 @@ match_species_id <- function(input_codes, format_name = 'custom', bety = NULL, t
                                   'be appended with ".translation_table" for disambiguation')
       }
       bety_species <- dplyr::tbl(bety, 'species') %>%
-        dplyr::filter(id %in% !!translation_table[['bety_species_id']]) %>%
-        dplyr::select(bety_species_id = id, genus, species) %>%
+        dplyr::filter(.data$id %in% !!translation_table[['bety_species_id']]) %>%
+        dplyr::select(bety_species_id = "id", "genus", "species") %>%
         dplyr::collect()
       translation <- dplyr::left_join(translation_table, bety_species,
                                       by = 'bety_species_id',
@@ -79,15 +80,21 @@ match_species_id <- function(input_codes, format_name = 'custom', bety = NULL, t
     if (!is.null(bety)) {
       # query BETY for species, id, genus, and latin name
       translation <- dplyr::tbl(bety, "species") %>%
-        dplyr::select(bety_species_id = id, genus, species,
+        dplyr::select(bety_species_id = "id", "genus", "species",
                        input_code = !!column) %>%
         dplyr::collect()
       translation <- dplyr::semi_join(
         translation,
         data.frame(input_code = input_codes, stringsAsFactors = FALSE),
         by = "input_code")
-    }else{
+    } else {
       # use traits package
+      if (!requireNamespace("traits", quietly = TRUE)) {
+        PEcAn.logger::logger.severe(
+          "Using match_species_id without a Bety connection",
+          "requires the `traits` package, which is not installed."
+        )
+      }
 
       # can call traits::betydb_query one at a time?
       # reduce the number of calls
@@ -102,6 +109,9 @@ match_species_id <- function(input_codes, format_name = 'custom', bety = NULL, t
           "traits::betydb_query(",
           column, "='", translation$input_code[i],
           "', table = 'species', user = 'bety', pwd = 'bety')")))
+        if(length(foo) == 0){
+          PEcAn.logger::logger.error(msg = "Match.species.id translation query returns empty for ", column, "='", translation$input_code[i])
+        }
         translation$bety_species_id[i] <- foo$id
         translation$genus[i]           <- foo$genus
         translation$species[i]         <- foo$species
@@ -117,7 +127,7 @@ match_species_id <- function(input_codes, format_name = 'custom', bety = NULL, t
       "species",
       "input_code",
       dplyr::everything())
-  merge_table <- dplyr::left_join(input_table, translation)
+  merge_table <- dplyr::left_join(input_table, translation, by = "input_code")
   if (sum(is.na(merge_table$bety_species_id)) > 0) {
     bad <- unique(merge_table$input_code[is.na(merge_table$bety_species_id)])
     PEcAn.logger::logger.error(

@@ -1,14 +1,13 @@
 Package: PEcAn.MAAT
 Type: Package
-Title: PEcAn package for integration of the MAAT model
-Version: 1.7.2
-Date: 2021-10-04
-Authors@R: as.person(c(
-    "Shawn Serbin <sserbin@bnl.gov> [aut, cre]", 
-    "Anthony Walker <walkerap@ornl.gov> [aut]"
-     ))
-Maintainer: Shawn Serbin <sserbin@bnl.gov>
+Title: PEcAn Package for Integration of the MAAT Model
+Version: 1.7.5.9000
+Authors@R: c(
+    person("Shawn", "Serbin", role = c("aut", "cre"), email="sserbin@bnl.gov"),
+    person("Anthony", "Walker", role = "aut", email="walkerap@ornl.gov"))
 Description: This module provides functions to wrap the MAAT model into the PEcAn workflows.
+URL: https://pecanproject.github.io
+BugReports: https://github.com/PecanProject/pecan/issues
 Imports:
     PEcAn.data.atmosphere,
     PEcAn.logger,
@@ -17,15 +16,18 @@ Imports:
     PEcAn.utils,
     lubridate (>= 1.6.0),
     ncdf4 (>= 1.15),
-    udunits2 (>= 0.11),
     XML
 Suggests:
+    knitr (>= 1.50),
+    rmarkdown,
     testthat (>= 1.0.2)
 SystemRequirements: MAAT
 OS_type: unix
 License: BSD_3_clause + file LICENSE
 Copyright: Authors
+VignetteBuilder: knitr, rmarkdown
 LazyLoad: yes
 LazyData: FALSE
 Encoding: UTF-8
-RoxygenNote: 7.1.2
+RoxygenNote: 7.3.3
+X-schema.org-keywords: MAAT, ecosystem-modeling

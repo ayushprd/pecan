@@ -1,0 +1,82 @@
+# PEcAn.data.atmosphere 1.9.1.9000
+
+## Fixed
+
+* `align.met()` now correctly calculates output timesteps in cases where the source data is at a coarser time step than the training data and `align == "repeat"` (#4012, @anshul23102).
+
+# PEcAn.data.atmosphere 1.9.1
+
+## Added
+* New function `sat_vapor_pressure()` computes saturation vapor pressure from temperature (#3597).
+* New function `AmeriFlux_met_ensemble()` generates weather ensembles from Ameriflux data with ERA5 fallback for missing radiation and soil moisture (#3586).
+* `ERA5_met_process()` gains option `n_cores` to process ensemble data efficiently in parallel (#3563).
+* `download.ERA5_cds` gains options `time`, `dataset`, `product_type`, all defaulting to the values previously hard-coded (#3547).
+
+## Fixed
+* `downscale_solar_geom_halfhour()`: corrected the hour-of-day calculation from `* 48` to `* 24`. The previous formula produced a half-hour index (0-47) instead of an hour of day (0-23), causing `cos_solar_zenith_angle()` to compute a solar hour angle roughly pi radians off and therefore wrong potential shortwave radiation in all half-hourly downscaled met files.
+* Fixed `download_NOAA_GEFS_EFI`: the `sitename` filter compared the argument to itself (`sitename == sitename`), always returning data for all NEON sites instead of the requested one. Changed to `.data$sitename == sitename`.
+* Updated `download.NOAA_GEFS` to work with the current (v12.3) release of GEFS (#3349).
+
+## Changed
+* Dependency `nneo`, used by `download.NEONmet`, is now suggested rather than required. Caution: `nneo` is unmaintained, has been archived by its author on GitHub, and may be removed from a future PEcAn release.
+* Dependency `ggplot2` is now suggested rather than required. It is used in two vignettes and for optional diagnostic plots from `debias_met_regression`.
+* `download.ERA5_cds` now downloads NetCDF directly (replacing internal conversion from grib) using the R package ecmwfr (replacing python dependency on cdsapi via reticulate) (#3547).
+* `download.ERA5.cds()` now requires a valid Copernicus CDS API key, replacing the previous `.netrc` authentication. See the [ecmwfr package documentation](https://bluegreen-labs.github.io/ecmwfr/) for details.
+* `extract.nc.ERA5()` and `met2CF.ERA5` now support both ensemble and single-member data products (#3584).
+* added support for soil temperature, relative humidity, soil moisture, and PPFD downscaling to `met_temporal_downscale.Gaussian_ensemble` (#3586).
+* Removed `sitename` and `username` from the formal arguments of `download.NOAA_GEFS`.
+	Before they were silently ignored, now they're treated as part of `...` (which is also ignored!) (#3349).
+
+
+
+# PEcAn.data.atmosphere 1.9.0
+
+## Fixed
+
+* `download.AmerifluxLBL` no longer wrongly re-fetches raw zipfiles when `overwrite = FALSE`
+
+## Changed
+
+* Functions that take argument `site_id` now accept strings as well as BETYdb numeric IDs. 
+* `download.ERA5.old` renamed to `download.ERA5_cds`
+
+## Removed
+
+* Helper function `db.site.lat.lon` has been removed. Users should use `PEcAn.DB::query.site(id, con)[c("lat", "lon")]` instead [@Sweetdevil144, #3308]
+* Removed `browndog.net`; the Browndog service is defunct.
+
+
+# PEcAn.data.atmosphere 1.8.0
+
+## Fixed
+
+* Extensive code cleanup and fixes to function documentation [@moki1202, ; @meetagrawal, #3212; @aariq, #3055; @Its-Maniaco, #2954]
+* Retired packages `maptools` and `rgdal` are no longer imported [@istfer, #3228]
+* Unit conversion now uses `PEcAn.utils::ud_convert` to avoid relying on orphaned package `udunits2` [@nanu1695, #2989]
+* `download.MERRA()` now respects `overwrite = FALSE` [@meetagrawal09, #3169]
+* `download.MERRA()` can now find data from September of 2020 [@KristinaRiemer, #2888]
+* `download.Fluxnet2015()` now gives a more useful message when passed a malformed URL [@meetagrawal, #3130]
+* `cfmet.downscale.hourly` now produces the correct number of rows for timesteps other than 1 hour (#3270). Note that at extreme timesteps the downscaling algorithm may or may not give _sensible_ values; this patch just ensures it gives the number of values you asked for.
+
+## Added
+
+* Newly supported met data sources:
+	- ERA5 via `ERA5_met_process()` [@DongchenZ, #2886]
+	- NOAA GEFS data hosted by the Ecological Forecasting Initiative, via `download_NOAA_GEFS_EFI()` [@helge22a, #3174] (For GEFS data directly from NOAA, continue to use `download.NOAA_GEFS`)
+* Integration tests of met download from CRUNCEP (#3203), ERA5 (#3207), and Ameriflux (#3208) [@meetagrawal09]
+
+## Changed
+
+* Download of Ameriflux data now uses the `amerifluxr` package, replacing old custom download code [@HenriKajasilta, #2907]
+* `metgapfill()` can now handle partial years [@istfer, #2878]
+* Downscaling and `load.cfmet` now return plain data frames rather than `data.table`s. Package `data.table` is no longer a dependency.
+
+## Removed
+
+*  Helper function `robustly` has moved to package PEcAn.utils [@meetagrawal, #3096]
+
+
+# PEcAn.data.atmosphere 1.7.1
+
+* All changes in 1.7.1 and earlier were recorded in a single file for all of the PEcAn packages; please see
+https://github.com/PecanProject/pecan/blob/v1.7.1/CHANGELOG.md for details.

@@ -6,13 +6,13 @@
 ##' @param FUN   A Function for performing the analysis step. Two available options are: 1-EnKF and 2-GEF.
 ##' @param Forecast A list containing the forecasts variables including Q (process variance) and X (a dataframe of forecasts state variables for different ensemble)
 ##' @param Observed A list containing the observed variables including R (cov of observed state variables) and Y (vector of estimated mean of observed state variables)
-##' @param H is a mtrix of 1's and 0's specifying which observations go with which variables.
+##' @param H is a matrix of 1's and 0's specifying which observations go with which variables.
 ##' @param extraArg This argument is a list containing aqq, bqq and t. The aqq and bqq are shape parameters estimated over time for the proccess covariance and t gives the time in terms of index of obs.list. See Details.
 ##' @param ... Extra argument sent to the analysis function. In case you're using the `GEF` function, this function requires nt, obs.mean, obs.cov, which are the total number of steps, list of observed means and list of observed cov respectively.
 ##’ @details
 ##’  
 ##' 
-##' @description This functions uses the FUN to perform the analysis. EnKF function is developed inside the PEcAn.assim.sequential package which can be sent to this function to perform the Ensemble Kalman Filter. 
+##' @description This functions uses the FUN to perform the analysis. EnKF function is developed inside the PEcAnAssimSequential package which can be sent to this function to perform the Ensemble Kalman Filter. 
 ##' The other option is GEF function inside the same package allowing to perform Generalized Ensemble kalman Filter.
 ##' 
 ##' If you're using an arbitrary function you can use the ... to send any other variables to your desired analysis function.
@@ -40,7 +40,7 @@ Analysis.sda<-function(settings,
 ##' @param settings  pecan standard settings list.  
 ##' @param Forecast A list containing the forecasts variables including Q (process variance) and X (a dataframe of forecasts state variables for different ensemble)
 ##' @param Observed A list containing the observed variables including R (cov of observed state variables) and Y (vector of estimated mean of observed state variables)
-##' @param H is a mtrix of 1's and 0's specifying which observations go with which variables.
+##' @param H is a matrix of 1's and 0's specifying which observations go with which variables.
 ##' @param extraArg This argument is NOT used inside this function but it is a list containing aqq, bqq and t. The aqq and bqq are shape parameters estimated over time for the proccess covariance and t gives the time in terms of index of obs.list. See Details.
 ##' @param ... Extra argument sent to the analysis function.
 ##’ @details
@@ -50,7 +50,7 @@ Analysis.sda<-function(settings,
 ##' 
 ##' @return It returns a list with estimated mean and cov matrix of forecast state variables as well as mean and cov estimated as a result of assimilation/analysis .
 ##' @export
-EnKF<-function(setting, Forecast, Observed, H, extraArg=NULL, ...){
+EnKF<-function(settings, Forecast, Observed, H, extraArg=NULL, ...){
   
   #------------------------------Setup
   #-- reading the dots and exposing them to the inside of the function
@@ -66,7 +66,7 @@ EnKF<-function(setting, Forecast, Observed, H, extraArg=NULL, ...){
   Y <- Observed$Y
   # Enkf---------------------------------------------------
   mu.f <- as.numeric(apply(X, 2, mean, na.rm = TRUE))
-  Pf <- cov(X)
+  Pf <- stats::cov(X)
   
   
   diag(Pf)[which(diag(Pf) == 0)] <- 0.1 ## hack for zero variance
@@ -98,6 +98,7 @@ EnKF<-function(setting, Forecast, Observed, H, extraArg=NULL, ...){
 ##' @param settings  pecan standard settings list.  
 ##' @param Forecast A list containing the forecasts variables including Q (process variance) and X (a dataframe of forecast state variables for different ensemble)
 ##' @param Observed A list containing the observed variables including R (cov of observed state variables) and Y (vector of estimated mean of observed state variables)
+##' @param H not used
 ##' @param extraArg This argument is a list containing aqq, bqq and t. The aqq and bqq are shape parameters estimated over time for the process covariance and t gives the time in terms of index of obs.list. See Details.
 ##' @param nitr Number of iterations to run each MCMC chain.
 ##' @param nburnin 	Number of initial, pre-thinning, MCMC iterations to discard.
@@ -111,17 +112,17 @@ EnKF<-function(setting, Forecast, Observed, H, extraArg=NULL, ...){
 ##' @export
 GEF<-function(settings, Forecast, Observed, H, extraArg, nitr=50000, nburnin=10000, ...){
   #------------------------------Setup
-  #-- reading the dots and exposing them to the inside of the function
-  dots<-list(...)
-  if (length(dots)>0) lapply(names(dots),function(name){assign(name,dots[[name]], pos=1 )})
-  
+  #-- reading the dots: the calling workflow passes obs.mean through `...`
+  dots <- list(...)
+  obs.mean <- dots$obs.mean
+
   #General
   var.names <- sapply(settings$state.data.assimilation$state.variable, '[[', "variable.name")
   input.vars <- sapply(settings$state.data.assimilation$inputs, '[[', "variable.name")
   operators <- sapply(settings$state.data.assimilation$inputs, '[[', "operator")
   
   #Loading nimbles functions
-  #PEcAn.assim.sequential::load_nimble()
+  #PEcAnAssimSequential::load_nimble()
   
   #Forecast inputs 
   Q <- Forecast$Q # process error
@@ -135,7 +136,7 @@ GEF<-function(settings, Forecast, Observed, H, extraArg, nitr=50000, nburnin=100
   R <- try(solve(Observed$R), silent = F) #putting solve() here so if not invertible error is before compiling tobit2space #sfsmisc::posdefify(
   Y <- Observed$Y
   wish.df <- function(Om, X, i, j, col) {
-    (Om[i, j]^2 + Om[i, i] * Om[j, j]) / var(X[, col])
+    (Om[i, j]^2 + Om[i, i] * Om[j, j]) / stats::var(X[, col])
   }
   #----------------------------------- GEF-----------------------------------------------------
   # Taking care of censored data ------------------------------    
@@ -146,7 +147,7 @@ GEF<-function(settings, Forecast, Observed, H, extraArg, nitr=50000, nburnin=100
   wts <- extraArg$wts/sum(extraArg$wts)
   
   if(any(is.na(wts))){
-    logger.warn(paste('We found an NA in the wts for the ensemble members. Is this what you want? For now, we will change the NA to a zero.'))
+    PEcAn.logger::logger.warn(paste('We found an NA in the wts for the ensemble members. Is this what you want? For now, we will change the NA to a zero.'))
     wts[is.na(wts)] <- 0
   }
   if(sum(wts==0)){
@@ -164,7 +165,7 @@ GEF<-function(settings, Forecast, Observed, H, extraArg, nitr=50000, nburnin=100
   }
   
     ####getting ready to calculate y.ind and x.ind
-    for(i in 1:length(var.names)){
+    for(i in seq_along(var.names)){
       intervalX[which(startsWith(rownames(intervalX),
                                  var.names[i])), ] <- matrix(c(as.numeric(settings$state.data.assimilation$state.variables[[i]]$min_value),
                                                                as.numeric(settings$state.data.assimilation$state.variables[[i]]$max_value)),
@@ -213,8 +214,8 @@ GEF<-function(settings, Forecast, Observed, H, extraArg, nitr=50000, nburnin=100
                                        name = 'space')
       
       try(logprob_y_tobit2space <- tobit2space_pred$calculate('y.censored'))
-      if(is.na(logprob_y_tobit2space)) logger.warn('We cannot calculate a logprobability for your data in the tobit2space model. Check data.tobit2space variable in the global environment to make sure its what you want.')
-      if(logprob_y_tobit2space < -1000000) logger.warn(paste('Log probability very low for y in tobit2space model during time',t,'. Check initial conditions.'))
+      if(is.na(logprob_y_tobit2space)) PEcAn.logger::logger.warn('We cannot calculate a logprobability for your data in the tobit2space model. Check data.tobit2space variable in the global environment to make sure its what you want.')
+      if(logprob_y_tobit2space < -1000000) PEcAn.logger::logger.warn(paste('Log probability very low for y in tobit2space model during time',t,'. Check initial conditions.'))
       
       ## Adding X.mod,q,r as data for building model.
       conf_tobit2space <- configureMCMC(tobit2space_pred, thin = 10, print=TRUE)
@@ -297,15 +298,15 @@ GEF<-function(settings, Forecast, Observed, H, extraArg, nitr=50000, nburnin=100
       }
       print(gelman.keep.tobit2space)
       
-      if(any(gelman.keep.tobit2space > 1.5)) logger.warn(paste('Gelman value > 1.5 for tobit2space model. Re-assess time point', t))
+      if(any(gelman.keep.tobit2space > 1.5)) PEcAn.logger::logger.warn(paste('Gelman value > 1.5 for tobit2space model. Re-assess time point', t))
 
       save(dat.tobit2space, file = file.path(outdir, paste0('dat.tobit2space',t,'.Rdata')))
     }
     
-    pdf(file.path(outdir,paste0('assessParams',t,'.pdf')))
+    grDevices::pdf(file.path(outdir,paste0('assessParams',t,'.pdf')))
     set.seed(t)
     try(assessParams(dat = dat.tobit2space[sample(x = 10:nrow(dat.tobit2space),size = 500,replace = F),],wts=wts, Xt = X))
-    dev.off()
+    grDevices::dev.off()
     
     ## TO DO Add MCMC Diagnostics, how do we do it for pecan meta-analysis?
     
@@ -361,11 +362,11 @@ GEF<-function(settings, Forecast, Observed, H, extraArg, nitr=50000, nburnin=100
   y.censored <- as.numeric(ifelse(Y > interval[,1], Y, 0))
   
   if(sum(y.censored,na.rm=T)==0){
-    logger.warn('NO DATA. Check y.censored in Analysis_sda.R')
+    PEcAn.logger::logger.warn('NO DATA. Check y.censored in Analysis_sda.R')
   }
   
   #which type of observation do we have at this time point?
-  input.order <- lapply(input.vars, grep, x=names(obs.mean[[t]])) # not going to work if AbvGrnWood is given in two different ways like tree rings and refab
+  input.order <- lapply(input.vars, grep, x=names(obs.mean[[t]][[1]])) # not going to work if AbvGrnWood is given in two different ways like tree rings and refab
   names(input.order) <- operators
   data_available <- unlist(input.order)
   
@@ -494,7 +495,7 @@ GEF<-function(settings, Forecast, Observed, H, extraArg, nitr=50000, nburnin=100
     ## this is needed for correct indexing later
     samplerNumberOffset <- length(conf$getSamplers())
     
-    for(i in 1:length(y.ind)) {
+    for(i in seq_along(y.ind)) {
       node <- paste0('y.censored[',i,']')
       conf$addSampler(node, 'toggle', control=list(type='RW'))
       ## could instead use slice samplers, or any combination thereof, e.g.:
@@ -510,7 +511,7 @@ GEF<-function(settings, Forecast, Observed, H, extraArg, nitr=50000, nburnin=100
     Cmodel <- compileNimble(model_pred)
     Cmcmc <- compileNimble(Rmcmc, project = model_pred)
     
-    for(i in 1:length(y.ind)) {
+    for(i in seq_along(y.ind)) {
       ## ironically, here we have to "toggle" the value of y.ind[i]
       ## this specifies that when y.ind[i] = 1,
       ## indicator variable is set to 0, which specifies *not* to sample
@@ -535,7 +536,7 @@ GEF<-function(settings, Forecast, Observed, H, extraArg, nitr=50000, nburnin=100
     # 
     # Cmodel$setInits(inits.pred())
     
-    for(i in 1:length(y.ind)) {
+    for(i in seq_along(y.ind)) {
       ## ironically, here we have to "toggle" the value of y.ind[i]
       ## this specifies that when y.ind[i] = 1,
       ## indicator variable is set to 0, which specifies *not* to sample
@@ -567,7 +568,7 @@ GEF<-function(settings, Forecast, Observed, H, extraArg, nitr=50000, nburnin=100
     gelman.keep[ff] <- try(coda::gelman.diag(mcmc.check,transform = T)$psrf[1])
   }
   print(gelman.keep)
-  if(any(gelman.keep > 1.5,na.rm = T)) logger.warn(paste('Gelman value > 1.5 for GEF model. Re-assess time point', t))
+  if(any(gelman.keep > 1.5,na.rm = T)) PEcAn.logger::logger.warn(paste('Gelman value > 1.5 for GEF model. Re-assess time point', t))
   
   try(save(gelman.keep.tobit2space,gelman.keep,file = file.path(outdir, paste0('gelman.diag',t,'.Rdata'))))
   
@@ -591,7 +592,7 @@ GEF<-function(settings, Forecast, Observed, H, extraArg, nitr=50000, nburnin=100
   mq <- dat[, iq]  # Omega, Precision
   q.bar <- matrix(apply(mq, 2, mean), length(mu.f), length(mu.f))  # Mean Omega, Precision
   
-  col <- matrix(1:length(mu.f) ^ 2, length(mu.f), length(mu.f))
+  col <- matrix(seq_len(length(mu.f) ^ 2), length(mu.f), length(mu.f))
   WV  <- matrix(0, length(mu.f), length(mu.f))
   for (i in seq_along(mu.f)) {
     for (j in seq_along(mu.f)) {
@@ -609,29 +610,29 @@ GEF<-function(settings, Forecast, Observed, H, extraArg, nitr=50000, nburnin=100
   aqq   <- V
   bqq   <- n
   
-  pdf(file.path(outdir, paste0('dat_plot', t, '.pdf')))
-  par(mfrow = c(2, 3))
+  grDevices::pdf(file.path(outdir, paste0('dat_plot', t, '.pdf')))
+  graphics::par(mfrow = c(2, 3))
   
-  for(rr in 1:length(iX)){
+  for(rr in seq_along(iX)){
     graphics::plot(dat_save[,iX[rr]],typ = 'l',main = paste('X',rr))
-    abline(h=mu.f[rr],col='blue')
+    graphics::abline(h=mu.f[rr],col='blue')
   }
   
-  for (rr in 1:length(iystar)) {
+  for (rr in seq_along(iystar)) {
     graphics::plot(dat_save[,iystar[rr]], type = 'l', main = paste('iystar',rr))
-    abline(h=(mu.a)[rr],col='red')
+    graphics::abline(h=(mu.a)[rr],col='red')
   }
   
-  for (rr in 1:length(iX)) {
+  for (rr in seq_along(iX)) {
     graphics::plot(dat_save[,iX.mod[rr]], type = 'l', main = paste('iX.mod',rr))
-    abline(h=mu.f[rr],col='blue')
+    graphics::abline(h=mu.f[rr],col='blue')
   }
   eigen_save <- matrix(NA,nrow=nrow(dat_save),ncol=ncol(X))
   for(rr in 1:nrow(dat_save)) {
     eigen_save[rr,] <- eigen((matrix(dat_save[rr, iq],ncol(X),ncol(X))))$values
   }
   apply(eigen_save,2,graphics::plot,typ='l')
-  dev.off()
+  grDevices::dev.off()
   
   return(list(mu.f = mu.f,
               Pf = Pf,
@@ -660,9 +661,9 @@ GEF<-function(settings, Forecast, Observed, H, extraArg, nitr=50000, nburnin=100
 ##’ @details
 ##’  
 ##' 
-##' @description This function creates a mtrix mapping obsereved data to their forecast state variable.
+##' @description This function creates a matrix mapping obsereved data to their forecast state variable.
 ##' 
-##' @return This returns a mtrix specifying which observation go with which state variables.
+##' @return This returns a matrix specifying which observation go with which state variables.
 ##' @export
 Construct_H <- function(choose, Y, X){
   ## design matrix

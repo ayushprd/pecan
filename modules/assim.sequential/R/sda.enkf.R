@@ -1,5 +1,10 @@
-##' @title sda.enkf
-##' @name  sda.enkf
+##' State Variable Data Assimilation: Ensemble Kalman Filter
+##'
+##' Restart mode:  Basic idea is that during a restart (primary case envisioned as an iterative forecast),
+##'  a new workflow folder is created and the previous forecast for the start_time is copied over.
+##' During restart the initial run before the loop is skipped, with the info being populated from the previous run.
+##' The function then dives right into the first Analysis, then continues on like normal.
+##'
 ##' @author Michael Dietze and Ann Raiho \email{dietze@@bu.edu}
 ##' 
 ##' @param settings    PEcAn settings object
@@ -10,17 +15,24 @@
 ##' @param adjustment  flag for using ensemble adjustment filter or not
 ##' @param restart      Used for iterative updating previous forecasts. This is a list that includes ens.inputs, the list of inputs by ensemble member, params, the parameters, and old_outdir, the output directory from the previous workflow. These three things are needed to ensure that if a new workflow is started that ensemble members keep there run-specific met and params. See Details
 ##'
-##’ @details
-##’ Restart mode:  Basic idea is that during a restart (primary case envisioned as an iterative forecast), a new workflow folder is created and the previous forecast for the start_time is copied over. During restart the initial run before the loop is skipped, with the info being populated from the previous run. The function then dives right into the first Analysis, then continues on like normal.
-##' 
-##' @description State Variable Data Assimilation: Ensemble Kalman Filter
-##' 
 ##' 
 ##' @return NONE
 ##' @export
 ##' 
 sda.enkf.original <- function(settings, obs.mean, obs.cov, IC = NULL, Q = NULL, adjustment = TRUE, restart=NULL) {
-  
+
+  if (!requireNamespace("plyr", quietly = TRUE)) {
+    PEcAn.logger::logger.error(
+      "Can't find package 'plyr',",
+      "needed by `PEcAnAssimSequential::sda.enkf.original()`.",
+      "Please install it and try again.")
+  }
+  if (!requireNamespace("PEcAn.visualization", quietly = TRUE)) {
+    PEcAn.logger::logger.error(
+      "Can't find package 'PEcAn.visualization',",
+      "needed by `PEcAnAssimSequential::sda.enkf.original()`.",
+      "Please install it and try again.")
+  }
   ymd_hms <- lubridate::ymd_hms
   hms     <- lubridate::hms
   second  <- lubridate::second
@@ -104,12 +116,15 @@ sda.enkf.original <- function(settings, obs.mean, obs.cov, IC = NULL, Q = NULL, 
       ### get only necessary ensemble inputs. Do not change in analysis
       #ens.inputs[[i]] <- get.ensemble.inputs(settings = settings, ens = sampleIDs[i])
       ### model specific split inputs
-      inputs[[i]] <- do.call(my.split_inputs, 
-                             args = list(settings = settings, 
-                                         start.time = settings$run$start.date, 
-                                         stop.time = as.Date(names(obs.mean)[1]),#settings$run$end.date,
-                                         inputs = ens.inputs[[i]]))#,
-      #                                       outpath = file.path(rundir,paste0("met",i))))
+      split_args <- list(
+        start.time = settings$run$start.date,
+        stop.time = as.Date(names(obs.mean)[1]),
+        inputs = ens.inputs[[i]]
+      )
+      if (model != "SIPNET") {
+        split_args <- c(list(settings = settings), split_args)
+      }
+      inputs[[i]] <- do.call(my.split_inputs, args = split_args)
     }
 
 #     ### get only necessary ensemble inputs. Do not change in analysis
@@ -128,11 +143,11 @@ sda.enkf.original <- function(settings, obs.mean, obs.cov, IC = NULL, Q = NULL, 
   ### open database connection                                          ###
   ###-------------------------------------------------------------------### 
   if (write) {
-    con <- try(db.open(settings$database$bety), silent = TRUE)
-    if (is(con, "try-error")) {
+    con <- try(PEcAn.DB::db.open(settings$database$bety), silent = TRUE)
+    if (inherits(con, "try-error")) {
       con <- NULL
     } else {
-      on.exit(db.close(con), add = TRUE)
+      on.exit(PEcAn.DB::db.close(con), add = TRUE)
     }
   } else {
     con <- NULL
@@ -145,7 +160,7 @@ sda.enkf.original <- function(settings, obs.mean, obs.cov, IC = NULL, Q = NULL, 
     workflow.id <- settings$workflow$id
   } else {
 #    workflow.id <- -1
-    settings <- check.workflow.settings(settings,con)
+    settings <- PEcAn.settings::check.workflow.settings(settings,con)
     workflow.id <- settings$workflow$id
     PEcAn.logger::logger.info("new workflow ID - ",workflow.id)
   }
@@ -155,7 +170,7 @@ sda.enkf.original <- function(settings, obs.mean, obs.cov, IC = NULL, Q = NULL, 
   ###-------------------------------------------------------------------### 
   if (!is.null(con)) {
     # write ensemble first
-    result <- db.query(
+    result <- PEcAn.DB::db.query(
       paste(
         "INSERT INTO ensembles (runtype, workflow_id) ",
         "values ('EnKF', ", workflow.id, ") returning id",
@@ -195,8 +210,8 @@ sda.enkf.original <- function(settings, obs.mean, obs.cov, IC = NULL, Q = NULL, 
     # cumulative_ensemble_samples <- numeric(0)
     # 
     # repeat{ # temporary SIPNET hack, I want to make sure sum <1 for SIPNET
-      get.parameter.samples(settings, ens.sample.method = settings$ensemble$method)  ## Aside: if method were set to unscented, would take minimal changes to do UnKF
-      load(file.path(settings$outdir, "samples.Rdata"))  ## loads ensemble.samples
+      PEcAn.uncertainty::get.parameter.samples(settings, ens.sample.method = settings$ensemble$method)  ## Aside: if method were set to unscented, would take minimal changes to do UnKF
+      ensemble.samples <- PEcAn.utils::load_local(file.path(settings$outdir, "samples.Rdata"))$ensemble.samples
     #   cumulative_ensemble_samples <- rbind(cumulative_ensemble_samples,ensemble.samples$temperate.deciduous_SDA)
     #   tot_check <- apply(ensemble.samples$temperate.deciduous_SDA[,c(20, 25,27)],1,sum) < 1
     #   cumulative_ensemble_samples <- cumulative_ensemble_samples[tot_check,]
@@ -235,7 +250,7 @@ sda.enkf.original <- function(settings, obs.mean, obs.cov, IC = NULL, Q = NULL, 
     }
     old_runs <- list.dirs(file.path(old_outdir,"out"),recursive=FALSE)
     ## select the _last_ nens
-    old_runs <- tail(old_runs,nens)
+    old_runs <- utils::tail(old_runs,nens)
   }
   
   
@@ -247,7 +262,7 @@ sda.enkf.original <- function(settings, obs.mean, obs.cov, IC = NULL, Q = NULL, 
     ## set RUN.ID
     if (!is.null(con)) {
       paramlist <- paste("EnKF:", i)
-      run.id[[i]] <- db.query(
+      run.id[[i]] <- PEcAn.DB::db.query(
         paste0(
           "INSERT INTO runs (",
             "model_id, site_id, ",
@@ -309,7 +324,7 @@ sda.enkf.original <- function(settings, obs.mean, obs.cov, IC = NULL, Q = NULL, 
   
   ## start model runs
   if(is.null(restart)){
-    PEcAn.remote::start.model.runs(settings, settings$database$bety$write)
+    PEcAn.workflow::start_model_runs(settings, settings$database$bety$write)
   }
 
   ###-------------------------------------------------------------------###
@@ -366,7 +381,7 @@ sda.enkf.original <- function(settings, obs.mean, obs.cov, IC = NULL, Q = NULL, 
   rownames(state.interval) <- var.names
   
   wish.df <- function(Om, X, i, j, col) {
-    (Om[i, j]^2 + Om[i, i] * Om[j, j]) / var(X[, col])
+    (Om[i, j]^2 + Om[i, i] * Om[j, j]) / stats::var(X[, col])
   }
   
   sampler_toggle <- nimble::nimbleFunction(
@@ -468,16 +483,16 @@ sda.enkf.original <- function(settings, obs.mean, obs.cov, IC = NULL, Q = NULL, 
   })
   
   t1         <- 1
-  pink       <- col2rgb("deeppink")
-  alphapink  <- rgb(pink[1], pink[2], pink[3], 180, max = 255)
-  green      <- col2rgb("green")
-  alphagreen <- rgb(green[1], green[2], green[3], 75, max = 255)
-  blue       <- col2rgb("blue")
-  alphablue  <- rgb(blue[1], blue[2], blue[3], 75, max = 255)
-  purple       <- col2rgb("purple")
-  alphapurple <- rgb(purple[1], purple[2], purple[3], 75, max = 255)
-  brown       <- col2rgb("brown")
-  alphabrown <- rgb(brown[1], brown[2], brown[3], 75, max = 255)
+  pink       <- grDevices::col2rgb("deeppink")
+  alphapink  <- grDevices::rgb(pink[1], pink[2], pink[3], 180, max = 255)
+  green      <- grDevices::col2rgb("green")
+  alphagreen <- grDevices::rgb(green[1], green[2], green[3], 75, max = 255)
+  blue       <- grDevices::col2rgb("blue")
+  alphablue  <- grDevices::rgb(blue[1], blue[2], blue[3], 75, max = 255)
+  purple       <- grDevices::col2rgb("purple")
+  alphapurple <- grDevices::rgb(purple[1], purple[2], purple[3], 75, max = 255)
+  brown       <- grDevices::col2rgb("brown")
+  alphabrown <- grDevices::rgb(brown[1], brown[2], brown[3], 75, max = 255)
 
   # weight matrix
   wt.mat <- matrix(NA, nrow = nens, ncol = nt)
@@ -532,7 +547,7 @@ for(t in seq_len(nt)) { #
     obs <- which(!is.na(obs.mean[[t]]))
     
     mu.f <- as.numeric(apply(X, 2, mean, na.rm = TRUE))
-    Pf <- cov(X)
+    Pf <- stats::cov(X)
     pmiss <- which(diag(Pf) == 0)
     diag(Pf)[pmiss] <- 0.1 ## hack for zero variance
     
@@ -550,7 +565,7 @@ for(t in seq_len(nt)) { #
       #                         function(x) x[2]))))) #matches y to model
       # 
       
-      choose <- na.omit(charmatch(colnames(X),names(obs.mean[[t]])))
+      choose <- stats::na.omit(charmatch(colnames(X),names(obs.mean[[t]])))
       
       Y <- unlist(obs.mean[[t]][choose])
       Y[is.na(Y)] <- 0 
@@ -578,7 +593,7 @@ for(t in seq_len(nt)) { #
           return(tmp)
         }))
         
-        Ybar <- Ybar[, na.omit(pmatch(colnames(X), colnames(Ybar)))]
+        Ybar <- Ybar[, stats::na.omit(pmatch(colnames(X), colnames(Ybar)))]
         YCI <- t(as.matrix(sapply(obs.cov[t1:t], function(x) {
           if (is.null(x)) {
             return(rep(NA, length(names.y)))
@@ -589,7 +604,7 @@ for(t in seq_len(nt)) { #
         for (i in sample(x = 1:ncol(X), size = 2)) {
           t1 <- 1
           Xbar <- plyr::laply(FORECAST[t1:t], function(x) { mean(x[, i], na.rm = TRUE) })
-          Xci <- plyr::laply(FORECAST[t1:t], function(x) { quantile(x[, i], c(0.025, 0.975)) })
+          Xci <- plyr::laply(FORECAST[t1:t], function(x) { stats::quantile(x[, i], c(0.025, 0.975)) })
           
           plot(as.Date(obs.times[t1:t]), 
                Xbar, 
@@ -601,17 +616,17 @@ for(t in seq_len(nt)) { #
           
           # observation / data
           if (i <= ncol(Ybar)) {
-            ciEnvelope(as.Date(obs.times[t1:t]), 
+            PEcAn.visualization::ciEnvelope(as.Date(obs.times[t1:t]), 
                        as.numeric(Ybar[, i]) - as.numeric(YCI[, i]) * 1.96, 
                        as.numeric(Ybar[, i]) + as.numeric(YCI[, i]) * 1.96, 
                        col = alphagreen)
-            lines(as.Date(obs.times[t1:t]), as.numeric(Ybar[, i]), type = "l", 
+            graphics::lines(as.Date(obs.times[t1:t]), as.numeric(Ybar[, i]), type = "l", 
                   col = "darkgreen", lwd = 2)
           }
           
           # forecast
-          ciEnvelope(as.Date(obs.times[t1:t]), Xci[, 1], Xci[, 2], col = alphablue)  # col='lightblue')
-          lines(as.Date(obs.times[t1:t]), Xbar, col = "darkblue", type = "l", lwd = 2)
+          PEcAn.visualization::ciEnvelope(as.Date(obs.times[t1:t]), Xci[, 1], Xci[, 2], col = alphablue)  # col='lightblue')
+          graphics::lines(as.Date(obs.times[t1:t]), Xbar, col = "darkblue", type = "l", lwd = 2)
         }
       }
       
@@ -647,7 +662,7 @@ for(t in seq_len(nt)) { #
         intervalX <- matrix(NA, ncol(X), 2)
         rownames(intervalX) <- colnames(X)
         #TO DO: Not working for fcomp
-        for(i in 1:length(var.names)){
+        for(i in seq_along(var.names)){
           intervalX[which(startsWith(rownames(intervalX),
                                      var.names[i])), ] <- matrix(c(as.numeric(settings$state.data.assimilation$state.variables[[i]]$min_value),
                                                                    as.numeric(settings$state.data.assimilation$state.variables[[i]]$max_value)),
@@ -734,10 +749,10 @@ for(t in seq_len(nt)) { #
         set.seed(0)
         dat.tobit2space <- runMCMC(Cmcmc_tobit2space, niter = 50000, progressBar=TRUE)
         
-        pdf(file.path(outdir,paste0('assessParams',t,'.pdf')))
+        grDevices::pdf(file.path(outdir,paste0('assessParams',t,'.pdf')))
         
         assessParams(dat = dat.tobit2space[1000:5000,], Xt = X)
-        dev.off()
+        grDevices::dev.off()
         
         ## update parameters
         dat.tobit2space  <- dat.tobit2space[1000:5000, ]
@@ -752,7 +767,10 @@ for(t in seq_len(nt)) { #
         X.new <- matrix(colMeans(dat.tobit2space[,iycens]),nrow(X),ncol(X))
         #Pf <- cov(X.new)
         
-        if(sum(diag(Pf)-diag(cov(X.new))) > 3 | sum(diag(Pf)-diag(cov(X.new))) < -3) logger.warn('Covariance in tobit2space model estimate is too different from original forecast covariance. Consider increasing your number of ensemble members.')
+        if (sum(diag(Pf) - diag(stats::cov(X.new))) > 3
+           || sum(diag(Pf) - diag(stats::cov(X.new))) < -3) {
+          PEcAn.logger::logger.warn('Covariance in tobit2space model estimate is too different from original forecast covariance. Consider increasing your number of ensemble members.')
+        }
         
         ###-------------------------------------------------------------------###
         ### Generalized Ensemble Filter                                       ###
@@ -772,7 +790,7 @@ for(t in seq_len(nt)) { #
         ### create matrix the describes the support for each observed state variable at time t
         interval <- matrix(NA, length(obs.mean[[t]]), 2)
         rownames(interval) <- names(obs.mean[[t]])
-        for(i in 1:length(var.names)){
+        for(i in seq_along(var.names)){
           interval[which(startsWith(rownames(interval),
                                     var.names[i])), ] <- matrix(c(as.numeric(settings$state.data.assimilation$state.variables[[i]]$min_value),
                                                                   as.numeric(settings$state.data.assimilation$state.variables[[i]]$max_value)),
@@ -797,7 +815,7 @@ for(t in seq_len(nt)) { #
             y.censored = y.censored,
             r = solve(R))
           inits.pred = list(q = diag(length(mu.f)), X.mod = as.vector(mu.f),
-                            X = rnorm(length(mu.f),0,1)) #
+                            X = stats::rnorm(length(mu.f),0,1)) #
           
           model_pred <- nimble::nimbleModel(tobit.model, data = data.tobit, dimensions = dimensions.tobit,
                                     constants = constants.tobit, inits = inits.pred,
@@ -810,7 +828,7 @@ for(t in seq_len(nt)) { #
           ## this is needed for correct indexing later
           samplerNumberOffset <- length(conf$getSamplers())
           
-          for(i in 1:length(y.ind)) {
+          for(i in seq_along(y.ind)) {
             node <- paste0('y.censored[',i,']')
             conf$addSampler(node, 'toggle', control=list(type='RW'))
             ## could instead use slice samplers, or any combination thereof, e.g.:
@@ -827,7 +845,7 @@ for(t in seq_len(nt)) { #
           Cmodel <- nimble::compileNimble(model_pred)
           Cmcmc <- nimble::compileNimble(Rmcmc, project = model_pred)
           
-          for(i in 1:length(y.ind)) {
+          for(i in seq_along(y.ind)) {
             ## ironically, here we have to "toggle" the value of y.ind[i]
             ## this specifies that when y.ind[i] = 1,
             ## indicator variable is set to 0, which specifies *not* to sample
@@ -844,10 +862,10 @@ for(t in seq_len(nt)) { #
           Cmodel$r <- solve(R)
           
           inits.pred = list(q = diag(length(mu.f)), X.mod = as.vector(mu.f),
-                            X = rnorm(ncol(X),0,1)) #
+                            X = stats::rnorm(ncol(X),0,1)) #
           Cmodel$setInits(inits.pred)
           
-          for(i in 1:length(y.ind)) {
+          for(i in seq_along(y.ind)) {
             ## ironically, here we have to "toggle" the value of y.ind[i]
             ## this specifies that when y.ind[i] = 1,
             ## indicator variable is set to 0, which specifies *not* to sample
@@ -864,16 +882,16 @@ for(t in seq_len(nt)) { #
         iq   <- grep("q", colnames(dat))
         iX   <- grep("X[", colnames(dat), fixed = TRUE)
         mu.a <- colMeans(dat[, iX])
-        Pa   <- cov(dat[, iX])
+        Pa   <- stats::cov(dat[, iX])
         Pa[is.na(Pa)] <- 0
         
-        CI.X1[, t] <- quantile(dat[, iX[1]], c(0.025, 0.5, 0.975))
-        CI.X2[, t] <- quantile(dat[, iX[2]], c(0.025, 0.5, 0.975))
+        CI.X1[, t] <- stats::quantile(dat[, iX[1]], c(0.025, 0.5, 0.975))
+        CI.X2[, t] <- stats::quantile(dat[, iX[2]], c(0.025, 0.5, 0.975))
         
         mq <- dat[, iq]  # Omega, Precision
         q.bar <- matrix(apply(mq, 2, mean), length(mu.f), length(mu.f))  # Mean Omega, Precision
         
-        col <- matrix(1:length(mu.f) ^ 2, length(mu.f), length(mu.f))
+        col <- matrix(seq_len(length(mu.f) ^ 2), length(mu.f), length(mu.f))
         WV  <- matrix(0, length(mu.f), length(mu.f))
         for (i in seq_along(mu.f)) {
           for (j in seq_along(mu.f)) {
@@ -959,8 +977,14 @@ for(t in seq_len(nt)) { #
 #        wt.mat[i,t]<-dmnorm_chol(FORECAST[[t]][i,], mu.a, solve(Pa), log = TRUE)
 #      }
       
-      if(sum(mu.a - colMeans(X_a)) > 1 | sum(mu.a - colMeans(X_a)) < -1) logger.warn('Problem with ensemble adjustment (1)')
-      if(sum(diag(Pa) - diag(cov(X_a))) > 5 | sum(diag(Pa) - diag(cov(X_a))) < -5) logger.warn('Problem with ensemble adjustment (2)')
+      if (sum(mu.a - colMeans(X_a)) > 1
+         || sum(mu.a - colMeans(X_a)) < -1) {
+        PEcAn.logger::logger.warn('Problem with ensemble adjustment (1)')
+      }
+      if (sum(diag(Pa) - diag(stats::cov(X_a))) > 5
+         || sum(diag(Pa) - diag(stats::cov(X_a))) < -5) {
+        PEcAn.logger::logger.warn('Problem with ensemble adjustment (2)')
+      }
       
       analysis <- as.data.frame(X_a)
     }else{
@@ -968,7 +992,7 @@ for(t in seq_len(nt)) { #
       if(length(is.na(Pa)) == length(Pa)){
         analysis <- mu.a
       }else{
-        analysis <- as.data.frame(rmvnorm(as.numeric(nrow(X)), mu.a, Pa, method = "svd"))
+        analysis <- as.data.frame(mvtnorm::rmvnorm(as.numeric(nrow(X)), mu.a, Pa, method = "svd"))
         
       }
     
@@ -1007,7 +1031,7 @@ for(t in seq_len(nt)) { #
       }))
       
       if(any(obs)){
-        Y.order <- na.omit(pmatch(colnames(X), colnames(Ybar)))
+        Y.order <- stats::na.omit(pmatch(colnames(X), colnames(Ybar)))
         Ybar <- Ybar[,Y.order]
         Ybar[is.na(Ybar)] <- 0
         YCI <- t(as.matrix(sapply(obs.cov[t1:t], function(x) {
@@ -1024,14 +1048,14 @@ for(t in seq_len(nt)) { #
         YCI <- matrix(NA,nrow=length(t1:t), ncol=max(length(names.y),1))
       }
       
-      par(mfrow = c(2, 1))
+      graphics::par(mfrow = c(2, 1))
       for (i in 1:ncol(FORECAST[[t]])) { #
         
         Xbar <- plyr::laply(FORECAST[t1:t], function(x) { mean(x[, i], na.rm = TRUE) })
-        Xci  <- plyr::laply(FORECAST[t1:t], function(x) { quantile(x[, i], c(0.025, 0.975), na.rm = TRUE) })
+        Xci  <- plyr::laply(FORECAST[t1:t], function(x) { stats::quantile(x[, i], c(0.025, 0.975), na.rm = TRUE) })
         
         Xa <- plyr::laply(ANALYSIS[t1:t], function(x) { mean(x[, i], na.rm = TRUE) })
-        XaCI <- plyr::laply(ANALYSIS[t1:t], function(x) { quantile(x[, i], c(0.025, 0.975), na.rm = TRUE) })
+        XaCI <- plyr::laply(ANALYSIS[t1:t], function(x) { stats::quantile(x[, i], c(0.025, 0.975), na.rm = TRUE) })
         
         ylab.names <- unlist(sapply(settings$state.data.assimilation$state.variable, 
                                     function(x) { x })[2, ], use.names = FALSE)
@@ -1045,11 +1069,11 @@ for(t in seq_len(nt)) { #
                xlab = "Year", 
                ylab = ylab.names[grep(colnames(X)[i], var.names)], 
                main = colnames(X)[i])
-          ciEnvelope(as.Date(obs.times[t1:t]),
+          PEcAn.visualization::ciEnvelope(as.Date(obs.times[t1:t]),
                      as.numeric(Ybar[, i]) - as.numeric(YCI[, i]) * 1.96, 
                      as.numeric(Ybar[, i]) + as.numeric(YCI[, i]) * 1.96, 
                      col = alphagreen)
-          lines(as.Date(obs.times[t1:t]), 
+          graphics::lines(as.Date(obs.times[t1:t]), 
                 as.numeric(Ybar[, i]), 
                 type = "l", 
                 col = "darkgreen", 
@@ -1065,12 +1089,12 @@ for(t in seq_len(nt)) { #
         }
         
         # forecast
-        ciEnvelope(as.Date(obs.times[t1:t]), Xci[, 1], Xci[, 2], col = alphablue)  #col='lightblue')
-        lines(as.Date(obs.times[t1:t]), Xbar, col = "darkblue", type = "l", lwd = 2)
+        PEcAn.visualization::ciEnvelope(as.Date(obs.times[t1:t]), Xci[, 1], Xci[, 2], col = alphablue)  #col='lightblue')
+        graphics::lines(as.Date(obs.times[t1:t]), Xbar, col = "darkblue", type = "l", lwd = 2)
         
         # analysis
-        ciEnvelope(as.Date(obs.times[t1:t]), XaCI[, 1], XaCI[, 2], col = alphapink)
-        lines(as.Date(obs.times[t1:t]), Xa, col = "black", lty = 2, lwd = 2)
+        PEcAn.visualization::ciEnvelope(as.Date(obs.times[t1:t]), XaCI[, 1], XaCI[, 2], col = alphapink)
+        graphics::lines(as.Date(obs.times[t1:t]), Xa, col = "black", lty = 2, lwd = 2)
         #legend('topright',c('Forecast','Data','Analysis'),col=c(alphablue,alphagreen,alphapink),lty=1,lwd=5)
       }
     }
@@ -1122,7 +1146,7 @@ for(t in seq_len(nt)) { #
       ### Run model                                                         ###
       ###-------------------------------------------------------------------### 
       print(paste("Running Model for Year", as.Date(obs.times[t]) + 1))
-      PEcAn.remote::start.model.runs(settings, settings$database$bety$write)
+      PEcAn.workflow::start_model_runs(settings, settings$database$bety$write)
     }
     
     ###-------------------------------------------------------------------###
@@ -1158,7 +1182,7 @@ for(t in seq_len(nt)) { #
   ###-------------------------------------------------------------------### 
   
   if(nens > 1){
-    pdf(file.path(settings$outdir, "sda.enkf.time-series.pdf"))
+    grDevices::pdf(file.path(settings$outdir, "sda.enkf.time-series.pdf"))
     
     names.y <- unique(unlist(lapply(obs.mean[t1:t], function(x) { names(x) })))
     Ybar <- t(sapply(obs.mean[t1:t], function(x) {
@@ -1168,7 +1192,7 @@ for(t in seq_len(nt)) { #
       tmp[mch] <- x[mch]
       tmp
     }))
-    Y.order <- na.omit(pmatch(colnames(FORECAST[[t]]), colnames(Ybar)))
+    Y.order <- stats::na.omit(pmatch(colnames(FORECAST[[t]]), colnames(Ybar)))
     Ybar <- Ybar[,Y.order]
     YCI <- t(as.matrix(sapply(obs.cov[t1:t], function(x) {
       if (is.null(x)) {
@@ -1181,14 +1205,14 @@ for(t in seq_len(nt)) { #
     YCI[is.na(YCI)]<-0
     
     YCI <- YCI[,Y.order]
-    Xsum <- plyr::laply(FORECAST, function(x) { mean(rowSums(x[,1:length(names.y)], na.rm = TRUE)) })[t1:t]
-    Xasum <- plyr::laply(ANALYSIS, function(x) { mean(rowSums(x[,1:length(names.y)], na.rm = TRUE)) })[t1:t]
+    Xsum <- plyr::laply(FORECAST, function(x) { mean(rowSums(x[, seq_along(names.y), drop = FALSE], na.rm = TRUE)) })[t1:t]
+    Xasum <- plyr::laply(ANALYSIS, function(x) { mean(rowSums(x[, seq_along(names.y), drop = FALSE], na.rm = TRUE)) })[t1:t]
     
     for (i in seq_len(ncol(X))) {
       Xbar <- plyr::laply(FORECAST[t1:t], function(x) {
         mean(x[, i], na.rm = TRUE) }) #/rowSums(x[,1:9],na.rm = T)
       Xci <- plyr::laply(FORECAST[t1:t], function(x) { 
-        quantile(x[, i], c(0.025, 0.975),na.rm = T) })
+        stats::quantile(x[, i], c(0.025, 0.975),na.rm = T) })
       
       Xci[is.na(Xci)]<-0
       
@@ -1199,7 +1223,7 @@ for(t in seq_len(nt)) { #
         
         mean(x[, i],na.rm = T) })
       XaCI <- plyr::laply(ANALYSIS[t1:t], function(x) { 
-        quantile(x[, i], c(0.025, 0.975),na.rm = T )})
+        stats::quantile(x[, i], c(0.025, 0.975),na.rm = T )})
       
       Xa <- Xa
       XaCI <- XaCI
@@ -1214,41 +1238,41 @@ for(t in seq_len(nt)) { #
       
       # observation / data
       if (i<10) { #
-        ciEnvelope(as.Date(obs.times[t1:t]), 
+        PEcAn.visualization::ciEnvelope(as.Date(obs.times[t1:t]), 
                    as.numeric(Ybar[, i]) - as.numeric(YCI[, i]) * 1.96, 
                    as.numeric(Ybar[, i]) + as.numeric(YCI[, i]) * 1.96, 
                    col = alphagreen)
-        lines(as.Date(obs.times[t1:t]), 
+        graphics::lines(as.Date(obs.times[t1:t]), 
               as.numeric(Ybar[, i]), 
               type = "l", col = "darkgreen", lwd = 2)
       }
       
       # forecast
-      ciEnvelope(as.Date(obs.times[t1:t]), Xci[, 1], Xci[, 2], col = alphablue)  #col='lightblue') #alphablue
-      lines(as.Date(obs.times[t1:t]), Xbar, col = "darkblue", type = "l", lwd = 2) #"darkblue"
+      PEcAn.visualization::ciEnvelope(as.Date(obs.times[t1:t]), Xci[, 1], Xci[, 2], col = alphablue)  #col='lightblue') #alphablue
+      graphics::lines(as.Date(obs.times[t1:t]), Xbar, col = "darkblue", type = "l", lwd = 2) #"darkblue"
       
       # analysis
-      ciEnvelope(as.Date(obs.times[t1:t]), XaCI[, 1], XaCI[, 2], col = alphapink) #alphapink
-      lines(as.Date(obs.times[t1:t]), Xa, col = "black", lty = 2, lwd = 2) #"black"
+      PEcAn.visualization::ciEnvelope(as.Date(obs.times[t1:t]), XaCI[, 1], XaCI[, 2], col = alphapink) #alphapink
+      graphics::lines(as.Date(obs.times[t1:t]), Xa, col = "black", lty = 2, lwd = 2) #"black"
       
-      legend('topright',c('Forecast','Data','Analysis'),col=c(alphablue,alphagreen,alphapink),lty=1,lwd=5)
+      graphics::legend('topright',c('Forecast','Data','Analysis'),col=c(alphablue,alphagreen,alphapink),lty=1,lwd=5)
     
     }
     
-    dev.off()
+    grDevices::dev.off()
     ###-------------------------------------------------------------------###
     ### bias diagnostics                                                  ###
     ###-------------------------------------------------------------------###
-    pdf(file.path(settings$outdir, "bias.diagnostic.pdf"))
+    grDevices::pdf(file.path(settings$outdir, "bias.diagnostic.pdf"))
     for (i in seq_along(obs.mean[[1]])) {
       Xbar <- plyr::laply(FORECAST[t1:t], function(x) { mean(x[, i], na.rm = TRUE) })
-      Xci <- plyr::laply(FORECAST[t1:t], function(x) { quantile(x[, i], c(0.025, 0.975)) })
+      Xci <- plyr::laply(FORECAST[t1:t], function(x) { stats::quantile(x[, i], c(0.025, 0.975)) })
       
       Xa <- plyr::laply(ANALYSIS[t1:t], function(x) { mean(x[, i], na.rm = TRUE) })
-      XaCI <- plyr::laply(ANALYSIS[t1:t], function(x) { quantile(x[, i], c(0.025, 0.975)) })
+      XaCI <- plyr::laply(ANALYSIS[t1:t], function(x) { stats::quantile(x[, i], c(0.025, 0.975)) })
       
       if(length(which(is.na(Ybar[,i])))>=length(t1:t)) next()
-      reg <- lm(Xbar[t1:t] - unlist(Ybar[, i]) ~ c(t1:t))
+      reg <- stats::lm(Xbar[t1:t] - unlist(Ybar[, i]) ~ c(t1:t))
       plot(t1:t, 
            Xbar - unlist(Ybar[, i]),
            pch = 16, cex = 1, 
@@ -1256,18 +1280,18 @@ for(t in seq_len(nt)) { #
            xlab = "Time", 
            ylab = "Error", 
            main = paste(colnames(X)[i], " Error = Forecast - Data"))
-      ciEnvelope(rev(t1:t), 
+      PEcAn.visualization::ciEnvelope(rev(t1:t), 
                  rev(Xci[, 1] - unlist(Ybar[, i])), 
                  rev(Xci[, 2] - unlist(Ybar[, i])),
                  col = alphabrown)
-      abline(h = 0, lty = 2, lwd = 2)
-      abline(reg)
-      mtext(paste("slope =", signif(summary(reg)$coefficients[2], digits = 3), 
+      graphics::abline(h = 0, lty = 2, lwd = 2)
+      graphics::abline(reg)
+      graphics::mtext(paste("slope =", signif(summary(reg)$coefficients[2], digits = 3), 
                   "intercept =", signif(summary(reg)$coefficients[1], digits = 3)))
       # d<-density(c(Xbar[t1:t] - unlist(Ybar[t1:t,i]))) lines(d$y+1,d$x)
       
       # forecast minus analysis = update
-      reg1 <- lm(Xbar - Xa ~ c(t1:t))
+      reg1 <- stats::lm(Xbar - Xa ~ c(t1:t))
       plot(t1:t, 
            Xbar - Xa, 
            pch = 16, cex = 1, 
@@ -1275,13 +1299,13 @@ for(t in seq_len(nt)) { #
            xlab = "Time", ylab = "Update", 
            main = paste(colnames(X)[i], 
                         "Update = Forecast - Analysis"))
-      ciEnvelope(rev(t1:t), 
+      PEcAn.visualization::ciEnvelope(rev(t1:t), 
                  rev(Xbar - XaCI[, 1]), 
                  rev(Xbar - XaCI[, 2]), 
                  col = alphapurple)
-      abline(h = 0, lty = 2, lwd = 2)
-      abline(reg1)
-      mtext(paste("slope =", signif(summary(reg1)$coefficients[2], digits = 3),
+      graphics::abline(h = 0, lty = 2, lwd = 2)
+      graphics::abline(reg1)
+      graphics::mtext(paste("slope =", signif(summary(reg1)$coefficients[2], digits = 3),
                   "intercept =", signif(summary(reg1)$coefficients[1], 
                                         digits = 3)))
       # d<-density(c(Xbar[t1:t] - Xa[t1:t])) lines(d$y+1,d$x)
@@ -1308,27 +1332,27 @@ for(t in seq_len(nt)) { #
       }
       
     }
-    dev.off()
+    grDevices::dev.off()
     
     ###-------------------------------------------------------------------###
     ### process variance plots                                            ###
     ###-------------------------------------------------------------------### 
     if (processvar) {
       
-      pdf('process.var.plots.pdf')
+      grDevices::pdf('process.var.plots.pdf')
       
-      cor.mat <- cov2cor(solve(enkf.params[[t]]$q.bar))
+      cor.mat <- stats::cov2cor(solve(enkf.params[[t]]$q.bar))
       colnames(cor.mat) <- colnames(X)
       rownames(cor.mat) <- colnames(X)
-      par(mfrow = c(1, 1), mai = c(1, 1, 4, 1))
+      graphics::par(mfrow = c(1, 1), mai = c(1, 1, 4, 1))
       corrplot::corrplot(cor.mat, type = "upper", tl.srt = 45,order='FPC')
       
-      par(mfrow=c(1,1))   
+      graphics::par(mfrow=c(1,1))   
       plot(as.Date(obs.times[t1:t]), unlist(lapply(enkf.params,'[[','n')),
            pch = 16, cex = 1,
            ylab = "Degrees of Freedom", xlab = "Time")
       
-      dev.off()
+      grDevices::dev.off()
       
     }
     
@@ -1360,7 +1384,7 @@ for(t in seq_len(nt)) { #
     
   }
   
-  pdf(file.path(settings$outdir, "sda.enkf.time-series.pdf"))
+  grDevices::pdf(file.path(settings$outdir, "sda.enkf.time-series.pdf"))
   
   names.y <- unique(unlist(lapply(obs.mean[t1:t], function(x) { names(x) })))
   Ybar <- t(sapply(obs.mean[t1:t], function(x) {
@@ -1370,7 +1394,7 @@ for(t in seq_len(nt)) { #
     tmp[mch] <- x[mch]
     tmp
   }))
-  Y.order <- na.omit(pmatch(colnames(FORECAST[[t]]), colnames(Ybar)))
+  Y.order <- stats::na.omit(pmatch(colnames(FORECAST[[t]]), colnames(Ybar)))
   Ybar <- Ybar[,Y.order]
   YCI <- t(as.matrix(sapply(obs.cov[t1:t], function(x) {
     if (is.null(x)) {
@@ -1383,14 +1407,14 @@ for(t in seq_len(nt)) { #
   YCI[is.na(YCI)]<-0
   
   YCI <- YCI[,Y.order]
-  Xsum <- plyr::laply(FORECAST, function(x) { mean(rowSums(x[,1:length(names.y)], na.rm = TRUE)) })[t1:t]
-  Xasum <- plyr::laply(ANALYSIS, function(x) { mean(rowSums(x[,1:length(names.y)], na.rm = TRUE)) })[t1:t]
+  Xsum <- plyr::laply(FORECAST, function(x) { mean(rowSums(x[, seq_along(names.y), drop = FALSE], na.rm = TRUE)) })[t1:t]
+  Xasum <- plyr::laply(ANALYSIS, function(x) { mean(rowSums(x[, seq_along(names.y), drop = FALSE], na.rm = TRUE)) })[t1:t]
   
   for (i in seq_len(ncol(X))) {
     Xbar <- plyr::laply(FORECAST[t1:t], function(x) {
       mean(x[, i], na.rm = TRUE) }) #/rowSums(x[,1:9],na.rm = T)
     Xci <- plyr::laply(FORECAST[t1:t], function(x) { 
-      quantile(x[, i], c(0.025, 0.975),na.rm = T) })
+      stats::quantile(x[, i], c(0.025, 0.975),na.rm = T) })
     
     Xci[is.na(Xci)]<-0
     
@@ -1401,7 +1425,7 @@ for(t in seq_len(nt)) { #
       
       mean(x[, i],na.rm = T) })
     XaCI <- plyr::laply(ANALYSIS[t1:t], function(x) { 
-      quantile(x[, i], c(0.025, 0.975),na.rm = T )})
+      stats::quantile(x[, i], c(0.025, 0.975),na.rm = T )})
     
     Xa <- Xa
     XaCI <- XaCI
@@ -1416,41 +1440,41 @@ for(t in seq_len(nt)) { #
     
     # observation / data
     if (i<ncol(X)) { #
-      ciEnvelope(as.Date(obs.times[t1:t]), 
+      PEcAn.visualization::ciEnvelope(as.Date(obs.times[t1:t]), 
                  as.numeric(Ybar[, i]) - as.numeric(YCI[, i]) * 1.96, 
                  as.numeric(Ybar[, i]) + as.numeric(YCI[, i]) * 1.96, 
                  col = alphagreen)
-      lines(as.Date(obs.times[t1:t]), 
+      graphics::lines(as.Date(obs.times[t1:t]), 
             as.numeric(Ybar[, i]), 
             type = "l", col = "darkgreen", lwd = 2)
     }
     
     # forecast
-    ciEnvelope(as.Date(obs.times[t1:t]), Xci[, 1], Xci[, 2], col = alphablue)  #col='lightblue') #alphablue
-    lines(as.Date(obs.times[t1:t]), Xbar, col = "darkblue", type = "l", lwd = 2) #"darkblue"
+    PEcAn.visualization::ciEnvelope(as.Date(obs.times[t1:t]), Xci[, 1], Xci[, 2], col = alphablue)  #col='lightblue') #alphablue
+    graphics::lines(as.Date(obs.times[t1:t]), Xbar, col = "darkblue", type = "l", lwd = 2) #"darkblue"
     
     # analysis
-    ciEnvelope(as.Date(obs.times[t1:t]), XaCI[, 1], XaCI[, 2], col = alphapink) #alphapink
-    lines(as.Date(obs.times[t1:t]), Xa, col = "black", lty = 2, lwd = 2) #"black"
+    PEcAn.visualization::ciEnvelope(as.Date(obs.times[t1:t]), XaCI[, 1], XaCI[, 2], col = alphapink) #alphapink
+    graphics::lines(as.Date(obs.times[t1:t]), Xa, col = "black", lty = 2, lwd = 2) #"black"
     
-    legend('topright',c('Forecast','Data','Analysis'),col=c(alphablue,alphagreen,alphapink),lty=1,lwd=5)
+    graphics::legend('topright',c('Forecast','Data','Analysis'),col=c(alphablue,alphagreen,alphapink),lty=1,lwd=5)
     
   }
   
-  dev.off()
+  grDevices::dev.off()
   ###-------------------------------------------------------------------###
   ### bias diagnostics                                                  ###
   ###-------------------------------------------------------------------###
-  pdf(file.path(settings$outdir, "bias.diagnostic.pdf"))
+  grDevices::pdf(file.path(settings$outdir, "bias.diagnostic.pdf"))
   for (i in seq_along(obs.mean[[1]])) {
     Xbar <- plyr::laply(FORECAST[t1:t], function(x) { mean(x[, i], na.rm = TRUE) })
-    Xci <- plyr::laply(FORECAST[t1:t], function(x) { quantile(x[, i], c(0.025, 0.975)) })
+    Xci <- plyr::laply(FORECAST[t1:t], function(x) { stats::quantile(x[, i], c(0.025, 0.975)) })
     
     Xa <- plyr::laply(ANALYSIS[t1:t], function(x) { mean(x[, i], na.rm = TRUE) })
-    XaCI <- plyr::laply(ANALYSIS[t1:t], function(x) { quantile(x[, i], c(0.025, 0.975)) })
+    XaCI <- plyr::laply(ANALYSIS[t1:t], function(x) { stats::quantile(x[, i], c(0.025, 0.975)) })
     
     if(length(which(is.na(Ybar[,i])))>=length(t1:t)) next()
-    reg <- lm(Xbar[t1:t] - unlist(Ybar[, i]) ~ c(t1:t))
+    reg <- stats::lm(Xbar[t1:t] - unlist(Ybar[, i]) ~ c(t1:t))
     plot(t1:t, 
          Xbar - unlist(Ybar[, i]),
          pch = 16, cex = 1, 
@@ -1458,18 +1482,18 @@ for(t in seq_len(nt)) { #
          xlab = "Time", 
          ylab = "Error", 
          main = paste(colnames(X)[i], " Error = Forecast - Data"))
-    ciEnvelope(rev(t1:t), 
+    PEcAn.visualization::ciEnvelope(rev(t1:t), 
                rev(Xci[, 1] - unlist(Ybar[, i])), 
                rev(Xci[, 2] - unlist(Ybar[, i])),
                col = alphabrown)
-    abline(h = 0, lty = 2, lwd = 2)
-    abline(reg)
-    mtext(paste("slope =", signif(summary(reg)$coefficients[2], digits = 3), 
+    graphics::abline(h = 0, lty = 2, lwd = 2)
+    graphics::abline(reg)
+    graphics::mtext(paste("slope =", signif(summary(reg)$coefficients[2], digits = 3), 
                 "intercept =", signif(summary(reg)$coefficients[1], digits = 3)))
     # d<-density(c(Xbar[t1:t] - unlist(Ybar[t1:t,i]))) lines(d$y+1,d$x)
     
     # forecast minus analysis = update
-    reg1 <- lm(Xbar - Xa ~ c(t1:t))
+    reg1 <- stats::lm(Xbar - Xa ~ c(t1:t))
     plot(t1:t, 
          Xbar - Xa, 
          pch = 16, cex = 1, 
@@ -1477,38 +1501,38 @@ for(t in seq_len(nt)) { #
          xlab = "Time", ylab = "Update", 
          main = paste(colnames(X)[i], 
                       "Update = Forecast - Analysis"))
-    ciEnvelope(rev(t1:t), 
+    PEcAn.visualization::ciEnvelope(rev(t1:t), 
                rev(Xbar - XaCI[, 1]), 
                rev(Xbar - XaCI[, 2]), 
                col = alphapurple)
-    abline(h = 0, lty = 2, lwd = 2)
-    abline(reg1)
-    mtext(paste("slope =", signif(summary(reg1)$coefficients[2], digits = 3),
+    graphics::abline(h = 0, lty = 2, lwd = 2)
+    graphics::abline(reg1)
+    graphics::mtext(paste("slope =", signif(summary(reg1)$coefficients[2], digits = 3),
                 "intercept =", signif(summary(reg1)$coefficients[1], 
                                       digits = 3)))
     # d<-density(c(Xbar[t1:t] - Xa[t1:t])) lines(d$y+1,d$x)
   }
-  dev.off()
+  grDevices::dev.off()
   
   ###-------------------------------------------------------------------###
   ### process variance plots                                            ###
   ###-------------------------------------------------------------------### 
   if (processvar) {
     
-    pdf('process.var.plots.pdf')
+    grDevices::pdf('process.var.plots.pdf')
     
-    cor.mat <- cov2cor(aqq[t,,] / bqq[t])
+    cor.mat <- stats::cov2cor(aqq[t,,] / bqq[t])
     colnames(cor.mat) <- colnames(X)
     rownames(cor.mat) <- colnames(X)
-    par(mfrow = c(1, 1), mai = c(1, 1, 4, 1))
+    graphics::par(mfrow = c(1, 1), mai = c(1, 1, 4, 1))
     corrplot::corrplot(cor.mat, type = "upper", tl.srt = 45,order='FPC')
     
-    par(mfrow=c(1,1))   
+    graphics::par(mfrow=c(1,1))   
     plot(as.Date(obs.times[t1:t]), bqq[t1:t],
          pch = 16, cex = 1,
          ylab = "Degrees of Freedom", xlab = "Time")
     
-    dev.off()
+    grDevices::dev.off()
     
   }
   

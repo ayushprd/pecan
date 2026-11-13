@@ -1,12 +1,3 @@
-#-------------------------------------------------------------------------------
-# Copyright (c) 2012 University of Illinois, NCSA.
-# All rights reserved. This program and the accompanying materials
-# are made available under the terms of the
-# University of Illinois/NCSA Open Source License
-# which accompanies this distribution, and is available at
-# http://opensource.ncsa.illinois.edu/license.html
-#-------------------------------------------------------------------------------
-#--------------------------------------------------------------------------------------------------#
 ##'  select plant id's associated with pft
 ##'
 ##' @title Query species given pft name
@@ -19,8 +10,8 @@
 ##' @author David LeBauer
 ##' @examples
 ##' \dontrun{
-##' query.pft_species('ebifarm.pavi')
-##' query.pft_species(settings = read.settings("pecan.xml"))
+##'   con <- db.open(list(host = "postgres", user = "bety", password = "carya")) 
+##'   query.pft_species("ebifarm.pavi", con = con)
 ##' }
 query.pft_species <- function(pft, modeltype = NULL, con) {
   # create pft subquery
@@ -90,12 +81,12 @@ query.pft_cultivars <- function(pft, modeltype = NULL, con) {
       by=c("specie_id" = "id"),
       suffix=c("", ".sp"))
     %>% dplyr::select(
-      id = .data$cultivar_id,
-      .data$specie_id,
-      .data$genus,
-      .data$species,
-      .data$scientificname,
-      cultivar = .data$name.cv)
+      id = "cultivar_id",
+      "specie_id",
+      "genus",
+      "species",
+      "scientificname",
+      cultivar = "name.cv")
     %>% dplyr::collect())
 }
 

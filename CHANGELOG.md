@@ -1,4 +1,5 @@
 # Change Log
+
 All notable changes are kept in this file. All changes made should be added to the section called
 `Unreleased`. Once a new release is made this file will be updated to create a new `Unreleased`
 section for the next release.
@@ -7,14 +8,309 @@ For more information about this file see also [Keep a Changelog](http://keepacha
 
 ## Unreleased
 
+### Added
+
+- `PEcAn.settings::setEnsemblePaths()` can now include site-specific components in the paths it generates (#4100).
+- `PEcAn.SIPNET::model2netcdf.SIPNET()` now also writes `soil_organic_carbon_content` (soil pool only, excluding litter) alongside `TotSoilCarb` (soil + litter) (#4160).
+- Added regression tests to `PEcAn.settings` confirming `check.ensemble.settings()` does not add an `ensemble` block to settings that lack one (#3024).
+- PEcAn.workflow::start_model_runs() gains argument `check_interval` to set the time between update checks. Psst, we just checked and your HPC admin says try keeping this longer than the default.
+- Added regression coverage for SIPNET event-JSON segmentation and segmented restart chaining (#4021).
+- Added a downscaling-error diagnostic to `inst/ilamb/` in PEcAn.benchmark: compares the downscaling random forest's out-of-bag RMSE against the between-member ensemble spread at the SDA sites, quantifying downscaling error the ensemble spread does not represent. (#4070)
+- Added `metric_Bias()` standalone function and registered `"BIAS"` in `PEcAn.benchmark` metric registry (#4062, #4059).
+- Added `metric_CRPS()` function and registry entry to `PEcAn.benchmark` for Continuous Ranked Probability Score (CRPS) ensemble skill evaluation against observations (#4062).
+- Added `efi_long_to_array()` helper function to `PEcAn.benchmark` for reshaping EFI long format model outputs into wide ensemble member matrices (#4062).
+- Added ensemble member spaghetti line rendering under confidence ribbons in `metric_timeseries_plot()` (#4062).
+- Added `examples/benchmarks/salinas_soc_ensemble/` demonstrating multi-site SOC ensemble validation against Salinas observations out-of-the-box (#4062)
+- Added ensemble calibration diagnostics to `inst/ilamb/` in PEcAn.benchmark (rank histogram, spread-skill ratio, coverage, reliability) for assessing whether an ensemble's spread is well calibrated against observations, complementing the ensemble-mean benchmarking.
+- Added regional calibration diagnostics to `inst/ilamb/` in PEcAn.benchmark: break the ensemble calibration assessment down by land cover class and by EPA/CEC ecoregion, reusing the ensemble calibration diagnostics, with figures.
+- Added an ESA CCI biomass benchmark extension to `inst/ilamb/` in PEcAn.benchmark: a converter for the ESACCI Biomass v7.0 product (2015-2024, with per-pixel uncertainty) to ILAMB-compatible netCDF, plus an observation-error test showing the ensemble overconfidence persists against a modern benchmark and after accounting for observation uncertainty.
+- Added `make_scorecard.sh` and documentation to `inst/ilamb/` in PEcAn.benchmark for generating and serving the ILAMB HTML scorecard.
+- New function `PEcAn.utils::netcdf2df()` flattens all dims and vars of a netCDF into a dataframe,
+    with units attached as an attribute.
+- New package `PEcAn.RothC` runs the RothC soil carbon model.
+- Added `inst/ilamb/` pipeline in PEcAn.benchmark to convert downscaled SDA reanalysis GeoTIFFs into ILAMB-compatible CF netCDF for carbon-cycle benchmarking (#4019).
+- Added multi-model benchmarking scripts to `inst/ilamb/` in PEcAn.benchmark: build the CMIP6 and TRENDY ensembles, score the PEcAn reanalysis and its individual SDA members against observational benchmarks over two evaluation windows, and summarize ensemble spread (#4038).
+- Added PEcAn.PEPRMT model, including a demo run with example data
+- Add `format_try_for_ma()` and `try_trait_mapping()` to `PEcAn.data.remote` to convert trait data from the external TRY database into the tabular format required by the PEcAn meta-analysis module (#3717).
+- Add function `qsub_sda()` for submitting SDA batch jobs by splitting a large number of sites into multiple small groups of sites (#3634).
+- Add function `PEcAn.MA::meta_analysis_standalone` to run meta-analysis without database or file IO.
+- Added Demo 03: Meta Analysis Quarto notebook (`documentation/tutorials/Demo_03_Meta_Analysis/meta_analysis.qmd`) to demonstrate how to perform Bayesian meta-analysis and visualize posterior distributions using pre-generated trait data.
+- Added `generate_OAT_SA_design()` function for sensitivity analysis input design. Unlike ensemble design which randomizes all inputs, SA design holds non-parameter inputs constant to isolate parameter effects (#3729)
+- Added datasets to `PEcAn.data.land` 
+  *  `landiq_crop_mapping_codes` dataset mapping LandIQ crop classification codes to human-readable crop names.
+  *  `bism_kc_by_crop` dataset containing BISm crop coefficient schedules and stage timing references for use in ET estimation, including columns that map to LandIQ class and subclass.
+  *  `ca_n_application_rate` dataset with recommended N application rates for 33 California crops (g N/m2 and lbs N/acre).
+  *  `ca_compost_amendment` dataset with properties of 32 organic amendment materials for California agriculture (g/m2 and lbs/acre).
+- Added lookup functions to `PEcAn.data.land`: `look_up_ca_n_rate()` and `look_up_ca_compost_amendment()` for querying crop-specific fertilization and compost data.
+- PEcAn.SIPNET gains support for SIPNET v2, whose features includes management events, nitrogen cycle tracking, explicit N2O and methane fluxes, runtime setting of feature flags, and changes to the parameter set (now 73 parameters). SIPNET v1 is still fully supported, but workarounds for bugs in the legacy `sipnet.unk` version have been removed.
+- Added `PEcAn.data.land::to_co2e()` for converting SOC change, CH4, and N2O to CO2-equivalent emissions using IPCC Global Warming Potential values.
+- Added `PEcAn.data.land::event_parquet_to_json` for generating PEcAn `event.json` files from well-formatted event parquet files, with support for ensembles of events.
+- Added statewide synthetic fertilization and compost amendment event workflows for CA ag parcels. Outputs share an ensemble naming so a downstream cleaner unions them into one fertilization event type for SIPNET.
+
+### Fixed
+- `PEcAn.utils::match_file()` anchors file prefixes to the beginning of the filename, so a request for `foo/site1` no longer matches `foo/old-site1` (but still finds `foo/site1-old` as previously) (#4196, @Shubham-Padkonde).
+- PEcAnAssimSequential: `simple.local()` and `piecew.poly.local()` now scale distances by their `scalef` argument instead of the undefined `rloc`; `GEF()`, `GEF.MultiSite()` and `EnKF.MultiSite()` read their extra arguments from `...` explicitly instead of assigning them into the global environment; `SDA_remote_launcher()` no longer references an undefined `stop.on.error`. Together these clear most of the package's "no visible binding for global variable" check notes (#2758).
+- `PEcAn.SIPNET::write.config.SIPNET()` wrote `stem_respiration_rate` and `root_respiration_rate` as per day rates into SIPNET's per year `baseVegResp` and `baseFineRootResp`, 365x too low.
+- Query latest release tag via git ls-remote in check package versions CI step to avoid API rate-limit failures (#4128).
+- Multisite sensitivity analyses gave every site the results of the last site, because `read.sa.output()` looked runs up in the shared run manifest instead of each site's `sa.run.ids`.
+- Rerunning `runModule.run.write.configs()` on multisite settings duplicated every row of `runs_manifest.csv`; `overwrite = TRUE` now clears it first.
+- A trait with no spread in its sensitivity analysis samples stopped `run.sensitivity.analysis()` with a spline error; it is now skipped with a warning.
+- The `align_pft` tests in PEcAn.benchmark are now skipped when no BETY database connection is available instead of failing (#4179).
+- Fixed broken and outdated documentation links in web and demo workflows (#4071).
+- Fixed dead MsTMIP variable-standard and PEcAn workflow diagram links in the PEcAn book, tutorial and package documentation (#4071).
+- Sensitivity analysis evaluated the splines of traits in Celsius at samples converted to K, about 273 units from where the splines were fit, giving wrong sensitivity, elasticity and variance for those traits. Only CV and elasticity are now computed in K.
+- Fixed date-based planting and harvest resolution in `PEcAn.data.land::eto_to_etc_bism()` for cross-calendar-year overwinter crops (#4125).
+- Fixed broken and outdated links across developer workflows in the PEcAn book and DEV-INTRO.md (#4071).
+- Building package documentation sites via `scripts/build_pkgdown.R` no longer exits early when any package gives a build warning (#4034).
+- In `run.sensitivity.analysis()`, load `samples` once before the variables loop, avoiding repeated disk reads (#3859).
+- The median run's manifest row went in with the literal strings `"NA"` for pft and trait, which `read.csv` turns into real `NA`, so `read.sa.output` never matched the median quantile and `splinefun` silently dropped that knot. Sensitivity analysis output changes as a result: partial variances shift slightly, though rankings are unaffected in the cases checked.
+- Docker GHA workflow no longer fails on pull requests opened from forks (#3618).
+- Removed unused `grid2netcdf()` from `PEcAn.data.remote` and fixed R CMD check reference notes for `download.LandTrendr.AGB()` (#2758).
+- Fixed broken pecanproject.github.io, pecan.gitbooks.io, and other outdated documentation links across book_source, tutorials, models, modules, web, and shiny files (#3710).
+- Added note to DEV-INTRO.md documenting Traefik workaround for Apple Silicon (ARM64) Macs: use `traefik:v2.11` with `platform: linux/arm64` to fix 404 errors (#3910)
+- Fixed `web/08-finished.php`: show database info instead of "Still running" when workflow folder doesn't exist locally (#3501).
+- `PEcAn.utils::transformstats()`: corrected the LSD-to-SE conversion. The previous implementation included an extra `sqrt(n)` factor, causing SE estimates derived from LSD to appear `sqrt(n)` times smaller than they should be, non-conservatively over-weighting those observations in meta-analysis. (#3998)
+- `segment_dataframe()` now returns an empty dataframe when date filtering removes all crop-cycle segments, instead of a single row with NA columns that caused downstream segment config errors (#4007).
+- `PEcAn.DB::db.exists()` now returns `FALSE` instead of an error when a table's primary key is not readable (#4156, @madhavzanwar).
+
 ### Changed
 
-- Using R4.0 and R4.1 tags to build PEcAn. Default is now 4.1
+- Sensitivity analysis runs are now written by `write.ensemble.configs`; `write.sa.configs` has been removed. The run design carries labels saying which parameter and quantile each run is, and the run ids, database entries and manifest rows are built from those.
+- Added `ensemble_downscale()`, a refactored version of `SDA_downscale()`.
+- `PEcAn.uncertainty::get.parameter.samples()`: replaced the `save_to_disk` flag (from #3860) with an `outdir` argument (default `settings$outdir`) controlling whether `samples.Rdata` is written; `outdir = NULL` skips the save. Existing callers are unaffected (@omkarrr2533, #4016)
+- Updated Docker architecture documentation to match current docker-compose.yml: removed portainer/minio/thredds, added rstudio/api sections, updated service lists and volumes (#3268).
+- Improved PEcAn.SIPNET documentation including README, model description, and current installation instructions (@Eshaan-byte; #3703, #3705).
+- `assign.treatments` has been renamed to `assign_treatments` and moved from `PEcAn.utils` to `PEcAn.MA` since that's the only place where it's used.
+- With new `PEcAn.MA::meta_analysis_standalone` function, `PEcAn.MA::run.meta.analysis.pft` now saves all files all at once _after_ the complete meta-analysis runs (and only if it is successful, including prior and posterior checks), rather than saving intermediate objects (like "JAGS-ified" data) as they are created.
+- Sensitivity analysis and ensemble runs now generate separate input design matrices with appropriate dimensions, fixing dimension mismatch errors in multisite workflows. (#3708)
+- Generated runs are now stored in a `runs_manifest.csv` file in the output directory instead of modifying `samples.Rdata` (#3708)
+- SDA workflows now maintain joint input sampling, via internal calls to `generate_joint_ensemble_design()` (#3634).
+- Management events specified via `events.json` are now required to specify a crop code for each planting event, so that models can know when to restart with a different PFT (#3828, #3836).
+- `PEcAn.data.land`: Moved optional dependencies `doSNOW`, `dplR`, `httr`,
+  `MCMCpack`, `mvtnorm`, `neonUtilities`, `neonstore`, `PEcAn.benchmark`,
+  `PEcAn.visualization`, `rjags`, `sirt`, and `sp` from `Imports` to
+  `Suggests` (@omkarrr2533, #3599).
+- Management events specified via `events.json` are now required to specify a crop code for each planting event, so that models can know when to restart with a different PFT (#3828, #3836).
+
+
+## [1.10.0] - 2026-01-06
+
+### Added
+
+- Add function `clip_and_save_raster_file()` for subsetting rasters to match a polygon of interest (#3537).
+- Add CH4 and N2O to standard_vars in PEcAn.utils
+- New function `sat_vapor_pressure()` added for computing saturation vapor pressure from temperature using various methods.
+- Added `AmeriFlux_met_ensemble()` function with ERA5 fallback for AmeriFlux meteorological data processing and ensemble generation
+- Added `all_site_nc_merge_by_year()` and `single_site_nc_merge()` functions to merge netCDF files across ensembles and sites from pecan model netCDF outputs.
+- Added parallel mode for the entire SDA workflow.
+- Define, add support for, and parse events schema
+  - Events schema and validate_events() function to PEcAn.data.land (#3623, #3521)
+  - Add `write.events.SIPNET()` to generate SIPNET `events.in` files from a `events.json` file.
+- Included all relevant carbon pools (`ROOT_BIOMASS`, `AG_BIOMASS`, `SOIL_STOCK`, `LIT_BIOMASS`) in BADM-based IC extraction; excluded non-pool variables like `SOIL_CHEM`.
+- Added explicit support for `LIT_BIOMASS` to fully utilize **BADM** biomass capabilities.
+- Added `test-IC_BADM_Utilities.R` to validate BADM initial condition extraction and processing
+- Added function for merging images from the same tiling system (MODIS, GLANCE, ICESat-2, HLS, etc.).
+- Added function for converting images towards the GDAL-supported formats (H5, NetCDF, HDF4, GeoTIFF, etc .).
+- New utility script `IC_SOILGRID_Utilities.R` for processing SoilGrids data to generate soil carbon initial condition (IC) files. This includes  (#3508):
+  - **`soilgrids_ic_process`**: A function to extract, process, and generate ensemble members from SoilGrids250m data.
+  - **`preprocess_soilgrids_data`**: A helper function to handle missing values and ensure data integrity during preprocessing. 
+  - **`generate_soilgrids_ensemble`**: A function to create ensemble members for a site based on processed soil carbon data. 
+- `extract.nc.ERA5()` and `met2CF.ERA5` now supports both ensemble and reanalysis data processing .
+- Initial Quarto notebook `run_pecan.qmd` to run PEcAn Demo 1 workflow from a pre-configured `pecan.xml` file, enabling notebook-based model runs, analysis, and visualization (#3531)
+ - Directory structure for PEcAn Quarto notebooks under `pecan/documentation/tutorials/Demo_1_Basic_Run`
+ - Support for inspecting and plotting NetCDF output variables within the notebook workflow.
+- added support for soil temperature, relative humidity, soil moisture, and PPFD downscaling to `met_temporal_downscale.Gaussian_ensemble`
+- The PEcAn uncertainty analysis tutorial ("Demo 2") has been updated and reimplemented as a Quarto notebook at `documentation/tutorials/Demo_02_Uncertainty_Analysis/uncertainty.qmd`. (#3570)
+- Added the shared `input_design` matrix, generated via 
+ `runModule.run.write.configs()`/`generate_joint_ensemble_design()`, that keeps
+  parameter draws and sampled inputs aligned across `run.write.configs()`,
+  `write.ensemble.configs()`(#3535, #3634, #3677).
+
+### Fixed
+
+- Fixed a bugs and BADM now process both single-site and multi-site settings, detecting the input structure and processing each site independently to generate the correct number of ensemble members per site.
+- Fixed "external pointer is not valid" error and addressed key bugs in `soilgrids_soilC_extract()` function (#3506)
+- Fixed a bug within the `model2netcdf.SIPNET` function where we assumed the constant calculations of `pecan_start_doy` across years (the calculations should vary depending on the last date from the last loop and the start date of the current loop), which will lead to incorrect calculations of the start `sub_dates` and `sub_dates_cf` if we are jumping between years (e.g., from 2012-12-31 to 2013-01-01). The `sipnet2datetime` function is no longer used anywhere and therefore has been removed.
+
+### Changed
+
+- Package `PEcAn.uncertainty` has changed licensing. With approval from all its contributors, we now provide it under a BSD 3-clause license rather than the previously used NCSA Open Source license.
+- Ensemble and sensitivity analyses now assign an ensemble ID if one is not specified in the XML, even when running with no DB (#3654).
+- `download.ERA5_cds` now uses the R package ecmwfr (replacing python dependency of cdsapi via reticulate), enabling direct NetCDF downloads; and made flexible for both reanalysis and ensemble data product.
+- `extract_soil_gssurgo` now supports spatial sampling using a grid of user-defined size and spacing. And supports ensemble simulation of soil organic carbon (SOC) stocks, using area-weighted aggregation
+- The ERA5 NC extraction function can now handle multi-site instead of one
+- All of the `met2model.*` functions no longer write a list of variables (`*.nc.var`) file alongside each output netcdf. If you need var files, use `PEcAn.utils::nc_write_vars()` after the run completes (#3611, #3616).
+- Refactor `convert_input` to Perform tasks via helper function. Subtask of [#3307](https://github.com/PecanProject/pecan/issues/3307)
+- Stopped testing on R 4.1, started testing on R 4.5, and updated prebuilt Docker images to match -- they are now available for R releases 4.2 through 4.5 as well as for R under development.
+- `write.config.STICS()` now modifies parameters with vectors rather than individually.
+- Code for DART has been moved from `modules/` to `contrib/` and its license more clearly described.
+- Updated docker.sh to mimic more the build for github actions, added options to push to other registries.
+- ED will now use the same configuration (docker GNU) as the official ED repository for building.
+
+
+## [1.9.0] - 2025-05-25
+
+### Added
+
+- Documentation of `make` options including addition of `make help`
+- Removed reference to PEcAn VM from documentation #3478
+- Add make option to document a single package with `make documentation pathto/package`
+- `settings$host$qsub` and `settings$host$modellauncher$qsub.extra` will now expand `@NJOBS@` to the number of models in the run, allowing e.g. `--array=1-@NJOBS@`. Note that qsub still by default submits every model as a separate job, so for now this is mostly useful for custom modellauncher scripts
+- Added automated pkgdown documentation for all PEcAn packages (@divine7022, #3482):
+  - Compiled pages are live at https://pecanproject.github.io/package-documentation and inside Docker at `pecan.localhost/pkgdocs/`, and these are automatically updated each time a PR to the source packages is merged.
+  - You can compile all pkgdown pages locally at any time with `make pkgdocs`.
+
+### Fixed
+- api to correctly use x_var from request in plotResults #3528
+- rstudio username is now set using DEFAULT_USER
+- ed2 did not compile with newer rocker images
+- api did not compile with newer rocker images
+- maespa did not compile with new fortran compiler
+- updated github action to build docker images
+- PEcAn.SIPNET now accepts relative paths in its input XML (#3418). Previously all files referenced in the autogenerated `job.sh` needed to be specified as absolute paths.
+- R version 4.4 installs Python 3.12 which wants to leverage os managed packages instead, install python3-pika using apt.
+
+### Changed
+
+- Docker images now use R 4.4 by default, with other supported versions available by appending the R version to the tag, e.g. `pecan/base:develop-R4.2`.
+- Is is now easier to run PEcAn workflows with no active database connection by setting `settings$database$bety$write` to FALSE or missing (#3398, #3419). In this mode you are reponsible for providing the correct paths/ids for all needed files, and run metadata are not written back to the database.
+- The following components have changed their licensing. With approval of all their contributors, we now provide them under a BSD 3-clause license rather than the previously used NCSA Open Source license. As a reminder, we intend to relicense the entire system and this list will expand as we gather permission from the relevant copyright owners.
+    * `apps/api`
+    * Shiny apps `dbsync`, `BenchmarkReport`, `Data-Ingest`, `Elicitation`, `ForecastingDashboard`, `global-sensitivity`, `Pecan.depend`, `SDAdashboard`, and `ViewMet`
+    * Base packages `PEcAn.all`, `PEcAn.DB`, `PEcAn.QAQC`, `PEcAn.remote`, `PEcAn.settings`, `PEcAn.visualization`, and `PEcAn.workflow`
+    * Model packages `PEcAn.BASGRA`, `PEcAn.CLM45`, `PEcAn.DALEC`, `PEcAn.dvmdostem`, `PEcAn.FATES`, `PEcAn.GDAY`, `PEcAn.JULES`, `PEcAn.LDNDC`, `PEcAn.LINKAGES`, `PEcAn.LPJGUESS`, `PEcAn.MAAT`, `PEcAn.MAESPA`, `PEcAn.PRELES`, `PEcAn.SIBCASA`, `PEcAn.SIPNET`, `PEcAn.STICS`, and the new model package template.
+    * Modules `PEcAn.allometry`, `PEcAn.assim.batch`, `PEcAn.data.mining`, `PEcAn.emulator`, `PEcAn.MA`, `PEcAn.photosynthesis`, `PEcAn.priors`, and `PEcAn.RTM`.
+- Renamed master branch to main
+- `PEcAn.all::pecan_version()` now reports commit hashes as well as version numbers for each installed package.
+
+### Removed
+
+- Remove Browndog support for conversions (#3348, @Sweetdevil144).
+- Package `PEcAn.PRELES` is no longer built or tested by default, because of ongoing build failures in the `RPreles` package it depends on.
+  Install it manually as needed, and be aware it is not being routinely checked by CI (so if you're checking it, please file bugs and submit fixes!).
+
+
+
+## [1.8.0] - 2024-07-12
+
+### Added
+- Created a new soilgrids function to extract the mean soil organic carbon profile with associated undertainty values at each depth for any lat/long location (#3040). Function was created for the CMS SDA workflow
+
+- `PEcAn.all` gains new function `pecan_version`, which reports for each PEcAn
+  package the version that was provided with this release and the version that
+  is currently installed. Use it in scripts to record your system state for
+  reproducibility, or for debugging.
+- Added a new function `unit_is_parseable` in PEcAn.utils to replace `udunits2::ud.is.parseable`.
+  (#3002; @nanu1605)
+- Initial LDNDC model coupling
+- Added optional `process_partial` argument to `model2netcdf.ED2()` to allow it to process existing output from failed runs.
+- Added litter_mass_content_of_water to standard_vars table and model2netcdf.SIPNET
+- Added all SIPNET state variables to read_restart and write_restart
+- Added Observation preparation functions into the SDA workflow, which supports AGB, LAI, Soil Carbon, and Soil moisture.
+- Added an optional `pfts` argument to `PEcAn.uncertainty::run.sensitivity.analysis()` so that sensitivity analysis and variance decomposition can be run on a subset of PFTs defined in `settings` if desired (#3155).
+- Added new features of the SDA function including: 1) allow user-defined free-run mode; 
+2) allow user-defined parallel mode for the qsub submission; 3) allow user-defined email option to report the progress.
+- `PEcAnAssimSequential::GET.MultiSite()` now supports the parallelization of multi-chain MCMC sampling with the fully randomized inits function.
+- Added the new feature of the block-based SDA workflow, which supports the parallel computation.
+- Added new SDA workflow for the 342 North America anchor sites.
+- Added new feature of preparing initial conditions for MODIS LAI, AGB, ISCN SOC, and soil moisture across NA anchor sites.
+- Added GEDI AGB preparation workflow.
+- Added new feature of downloading datasets from the NASA DAAC ORNL database.
+- Extended downscale function and created 'downscale_hrly' so that it handles more frequent data
+- Added 'aggregate' as a new feature for downscaled data.
+- Added ERA5 download function that applies to the new CDS API.
+- Added downscale functions and scripts that apply to the North America SDA run.
+
+### Fixed
+
+- Replaced the broken ameriflux download pipeline with the new amerifluxr package's function.
+- Fix broken build caused by BioCro updates #2925
+- rstudio was not working behind traefik.
+- plots now work in docker containers
+- when specifying diferent rstudio user, dev setup would mount pecan folder in wrong path.
+- fixed the pagination error in the next_page field of the workflows, inputs and runs Rest API.
+- bugs in `model2ncdf.ED2()` that were causing it to both error and also only
+convert data for a single PFT fixed (#1329, #2974, #2981)
+- Code cleanup in PEcAn.MA to protect against global namespace pollution (#2965, #2973; @nanu1605) 
+- Fixed vignettes and cleaned up internal warnings in PEcAn.DB (#2966, #2971; @nanu1605).
+- Updated unit conversions throughout PEcAn to use the `units` R package
+  instead of the unmaintained `udunits2`.
+  Note that both `units` and `udunits2` interface with the same underlying
+  compiled code, so the `udunits2` *system library* is still required.
+  (#2989; @nanu1605)
+- Occasionally some run directories were not getting copied over to remote hosts.  This should be fixed now (#3025)
+- Fixed a bug with ED2 where ED2IN tags supplied in `settings` that were not in the ED2IN template file were not getting added to ED2IN config files (#3034, #3033)
+- Fixed a bug where warnings were printed for file paths on remote servers even when they did exist (#3020)
+- Fixed bug in model2netcdf.SIPNET that caused LE to be overestimaed 10^3 (#3036)
+- Added an updated ED2IN template file, `models/ed/inst/ED2IN.r2.2.0.github`, to reflect new variables in the development version of ED2
+- `PEcAn.data.land::gSSURGO.Query` has been updated to work again after changes to the gSSURGO API.
+- `PEcAn.settings::read.settings()` now prints a warning when falling back on default `"pecan.xml"` if the named `inputfile` doesn't exist.
+- fqdn() can access hostname on Windows (#3044 fixed by #3058)
+- write.config.xml.ED2() wasn't using the <revision> tag in settings correctly (#3080)
+- runModule.get.trait.data() now correctly respects the settings$database$bety$write setting (#2968)
+- Fixed a bug in `model2netcdf.ed2()` where .nc file connections were being closed multiple times, printing warnings (#3078)
+- Fixed a bug causing the model2netcdf.ED2() step in jobs.sh to be incorrectly written (#3075)
+- Fixed a bug where `plant_min_temp` trait value wasn't being converted from ºC to K when writing config file for ED2 (#3110)
+- Fixed a bug in `PEcAn.ED2::read_E_files()` affecting `PEcAn.ED2::model2netcdf.ED2()` that resulted in incorrect calculations (#3126)
+- Fixed a bug in `PEcAn.utils::ud_convert()` where it failed with objects of class "difftime" introduced by refactoring to use the `units` package instead of `udunits` (#3012)
+- The propagation of aqq and bqq for the SINGLE Q type has been corrected.
+- The issue where the indirect constraints will be increase with the increase of the covariance sizes.
+- Updated URL for MERRA downloads (#2888)
+
+### Changed
+
+- The default build of PEcAn now uses R 4.1. PEcAn is also tested daily on R 4.2 and weekly on R-devel. R 4.0 and older are no longer tested and will probably not work.
+- Some changes have been made to the docker-compose file. Check your .env file to 
+  see if you need to change any of these:
+  - TRAEFIK_HOST is now TRAEFIK_HOSTNAME without the `Host:` and `;`, for example if you have
+    `TRAEFIK_HOST=Host:pecan.example.com;` you will need to change this to
+    `TRAEFIK_HOST=pecan.example.com`.
+  - TRAEFIK_IPFILTER is no longer used, and should be removed.
+  - TRAEFIK_HTTP_PORT now defaults to port 80
+  - TRAEFIK_HTTPS_PORT now defaults to port 443
+  - TRAEFIK_ACME_ENABLE is no longer used. If you want to use https you will need to add
+    `docker-compose.https.yml` to your command line. You can use the script `compose.sh`
+    to start PEcAn with https.
+  - TRAEFIK_HTTPS_OPTIONS is no longer used, this is the default when you use https.
+  - TRAEFIK_HTTP_REDIRECT is no longer used, this is the default when you use https.
+- Updated Dockerfile for sipnet/maespa/template to use pecan/models:tag to build.
+- The `yr` and `yfiles` arguments of `PEcAn.ED2::read_E_files()` are no longer used
+  and the simulation date is extracted from the names of the .h5 files output by ED2.
+- DDBH (change in DBH over time) is no longer extracted and summarized from
+  monthly -E- files by `PEcAn.ED2::model2netcdf.ED2()`.  We are not sure it makes
+  sense to summarize this variable across cohorts of different sizes.
+- `PEcAn.SIPNET::model2netcdf.SIPNET` can now export full year nc files by using 
+  the cdo_setup argument in the template job file. In detail, people will need
+  to specify `cdosetup = "module load cdo/2.0.6"`` in the host section. More details
+  are in the Create_Multi_settings.R script. (#3052)
+- `PEcAn.settings::read.settings()` now strips comments so HTML style comments (e.g. `<!-- a comment -->`) are now allowed in pecan.xml files
+- `PEcAn.logger::setLevel()` now invisibly returns the previously set logger level
+-  Warning messages for `model2netcdf.ed2()` coming from `ncdf4::ncvar_put()` now are prepended with the variable name for easier debugging (#3078)
 - Database connections consistently use `DBI::dbConnect` instead of the deprecated `dplyr::src_postgres` (#2881). This change should be invisible to most users, but it involved converting a lot of internal variables from `bety$con` to `con`. If you see errors involving these symbols it means we missed a place, so please report them as bugs.
+- `PEcAn.utils::download.url` argument `retry404` is now renamed to `retry` and
+  now functions as intended (it was being ignored completely before).
+- We have begun the process of relicensing the PEcAn packages from the previous NCSA license to BSD-3, with the consent of all contributors. PEcAn.logger is now distributed as BSD-3; others will be changed as their authors sign off.
+- Skipped ICOS and MERRA download tests when running in github actions
+- Converted .zenodo.json to CITATION.cff
+- Using traefik 2.5 instead of 1.7
+- api is now open by default (was auth required in the past)
+- Installation instructions updated in documentation
+- PEcAn.assim.sequential is renamed to PEcAnAssimSequential
+- `convert.input` is moved from PEcAn.utils to PEcAn.DB and renamed as `convert_input`.
+  This was needed to resolve a cyclic dependency between PEcAn.DB and PEcAn.utils.
+  (#3026; @nanu1605)
+- Internal changes to keep up to date with tidyselect v1.2.0
+- The `PEcAn.utils::download.file()` function has now been renamed to `PEcAn.utils::download_file()`
+- The `regrid()` and `grid2netcdf()` function from `PEcAn.utils` have been moved to `PEcAn.data.remote` package.
+- Web is now build using PHP 8 since PHP 7 is EOL.
 
 ### Removed
 
 - the check image (used in kubernetes) is removed, please use ncsa/checks instead.
+- Unused (and apparently long-broken) function `PEcAn.data.land::find.land` has been removed.
+- No longer building r136 sipnet docker image.
+
+
 
 ## [1.7.2] - 2021-10-04
 
@@ -22,7 +318,7 @@ For more information about this file see also [Keep a Changelog](http://keepacha
 
 This is a major change:
 
-- Newer version of R 
+- Newer version of R
 - Ubuntu 20.04 instead of Debian.
 
 ### Fixed
@@ -32,7 +328,7 @@ This is a major change:
 - Use initial biomass pools for Sorghum and Setaria #2495, #2496
 - PEcAn.DB::betyConnect() is now smarter, and will try to use either config.php or environment variables to create a connection. It has switched to use db.open helper function (#2632).
 - PEcAn.utils::tranformstats() assumed the statistic names column of its input was a factor. It now accepts character too, and returns the same class given as input (#2545).
-- fixed and added tests for `get.rh` function in PEcAn.data.atmosphere 
+- fixed and added tests for `get.rh` function in PEcAn.data.atmosphere
 - Invalid .zenodo.json that broke automatic archiving on Zenodo ([b56ef53](https://github.com/PecanProject/pecan/commit/b56ef53888d73904c893b9e8c8cfaeedd7b1edbe))
 - Fixed a filehandle leak in multi-year runs of PEcAn.BIOCRO::met2model.BIOCRO: It was only closing the last input file it processed (#2485).
 - Fix issue with cruncep download: use netcdf subset (ncss) method instead of opendap (#2424).
@@ -72,9 +368,9 @@ This is a major change:
 - No longer writing an arbitrary num for each PFT, this was breaking ED runs potentially.
 - The pecan/data container has no longer hardcoded path for postgres
 - PEcAn.JULES: Removed dependency on `ncdf4.helpers` package, which has been removed from CRAN (#2511).
-- data.remote: Arguments to the function `call_MODIS()` have been changed (issue #2519). 
-- Changed precipitaion downscale in `PEcAn.data.atmosphere::download.NOAA_GEFS_downscale`. Precipitation was being downscaled via a spline which was causing fake rain events. Instead the 6 hr precipitation flux values from GEFS are preserved with 0's filling in the hours between. 
-- Changed `dbfile.input.insert` to work with inputs (i.e soils) that don't have start and end dates associated with them 
+- data.remote: Arguments to the function `call_MODIS()` have been changed (issue #2519).
+- Changed precipitaion downscale in `PEcAn.data.atmosphere::download.NOAA_GEFS_downscale`. Precipitation was being downscaled via a spline which was causing fake rain events. Instead the 6 hr precipitation flux values from GEFS are preserved with 0's filling in the hours between.
+- Changed `dbfile.input.insert` to work with inputs (i.e soils) that don't have start and end dates associated with them
 - Default behavior for `stop_on_error` is now `TRUE` for non-ensemble runs; i.e., workflows that run only one model simulation (or omit the `ensemble` XML group altogether) will fail if the model run fails. For ensemble runs, the old behavior is preserved; i.e., workflows will continue even if one of the model runs failed. This behavior can also be manually controlled by setting the new `run -> stop_on_error` XML tag to `TRUE` or `FALSE`.
 - Several functions have been moved out of `PEcAn.utils` into other packages (#2830, #2857):
   * `ensemble.filename`, `get.results`, `runModule.get.results`, `read.sa.output`, `sensitivity.filename`,
@@ -120,6 +416,8 @@ This is a major change:
     `logger.setOutputFile`, `logger.setQuitOnSevere`, `logger.setWidth`, `logger.severe`, `logger.warn`.
     These are now in `PEcAn.logger`
 
+
+
 ## [1.7.1] - 2018-09-12
 
 ### Fixed
@@ -136,7 +434,7 @@ This is a major change:
 
 ### Changed
 - Updated modules/rtm PROSPECT docs
-- Updated models/sipnet/R/model2netcdf.SIPNET.R to address issues in PR #2254 
+- Updated models/sipnet/R/model2netcdf.SIPNET.R to address issues in PR #2254
 - Improved testing (#2281). Automatic Travis CI builds of PEcAn on are now run using three versions of R in parallel. This should mean fewer issues with new releases and better backwards compatibility, but note that we still only guarantee full compatibility with the current release version of R. The tested versions are:
   - `release`, the current public release of R (currently R 3.5). Build failures in this version are fixed before merging the change that caused them. When we say PEcAn is fully tested and working, this is the build we mean.
   - `devel`, the newest available development build of R. We will fix issues with this version before the next major R release.
@@ -174,6 +472,8 @@ This is a major change:
 - Removed unused function `PEcAn.visualization::points2county`, thus removing many indirect dependencies by no longer importing the `earth` package.
 - Removed package `PEcAn.data.mining` from the Make build. It can still be installed directly from R if desired, but is skipped by default because it is in early development, does not yet export any functions, and creates a dependency on the (large, often annoying to install) ImageMagick library.
 - Fully deprecate support for `MySQL` database driver. Now, only `PostgreSQL` (and, experimentally, `RPostgres`) are supported. With this, remove `RMySQL` dependency in several places.
+
+
 
 ## [1.7.0] - 2018-12-09
 
@@ -229,6 +529,8 @@ This is a major change:
   - Change base image for R code from `r-base` to `rocker/tidyverse:3.5.1`. This (1) saves build time (because many R packages and system dependencies are pre-installed), and (2) enhances reproducibility (because of the strict versioning rules of the `rocker` packages)
   - Re-factor web interface RabbitMQ create connections and post messages into their own PHP functions.
 
+
+
 ## [1.6.0] - 2018-09-01
 
 ### Fixes
@@ -259,12 +561,13 @@ This is a major change:
 - Small change to modules/data.atmosphere/R/download.NARR_site.R to set parallel=TRUE to match documentation and sub-function calls
 
 
+
 ## [1.6.0] - Not yet
 
 ### Fixes
 - Fixed issue #1939 which corrects output time vector for FATES output
 - Update to read.output to look for and read only PEcAn formatted .nc output based on the pecan standard filename format of YYYY.nc.  Solves issues with models such as FATES and dvm-dos-tem where the original model output is also in .nc file format and was not ignored by read.output, causing errors with output parsing and plotting with Shiny. Removed deprecated function convert.outputs
-- PEcAn.data.atmosphere: 
+- PEcAn.data.atmosphere:
     - download.Geostreams is pickier about formatting start/end datess, for fewer surprises in result timestamps
     - Fixed swapped lat/lon in met2CF.Geostreams
     - download.GFDL now records reference date in time units field, as required by the CF met standard
@@ -275,59 +578,59 @@ This is a major change:
 - missing_port_bety    
 - dataone_download.R:
 
-    - Added functionality that spoofs our user address to prevent authentication errors with downloading files via wget. 
+    - Added functionality that spoofs our user address to prevent authentication errors with downloading files via wget.
 - Could not specify the port for BETY in config.php. Can now use `db_bety_port` to specify port.
 
     - Added functionality that spoofs our user address to prevent authentication errors with downloading files via wget.
-    
-- Data_Ingest_App:
-    - use `updateSelectizeInput` to populate `selectizeInput` with choices from BETYdb. This instantly loads the inputfields where other methods take minutes to load. 
 
-    
+- Data_Ingest_App:
+    - use `updateSelectizeInput` to populate `selectizeInput` with choices from BETYdb. This instantly loads the inputfields where other methods take minutes to load.
+
+
 ### Added
 - sda.enkf function inside the `PEcAn.assim.sequential` package was replaced with the refactored version, while the original sda function can be found in the same package with the name of sda.enkf.original.
 - PEcAn.undertainty gains one new function (input.ens.gen) and three functions moved from PEcAn.utils (see "Changed" below)
 - IC workflow now has functionality to generate ensembles.
-- You can now generate ensembles for parameters and met separatly and using different methods. 
+- You can now generate ensembles for parameters and met separatly and using different methods.
 - Soil process is now capable of reading in soil data from gSSURGO databse.
 - In modules/rtm new function foursail()  to interface with the 4SAIL Fortran code. To enable the use of 4SAIL with any version of PROSPECT (i.e. 4, 5, 5b, D) and custom soil/background reflectance inputs
-- Shiny/Dependency explorer 
+- Shiny/Dependency explorer
 - Explore the interdependencies between pecan packages/functions.
 - From history you can now select an old run and show the curl command to re-execute this run. This only works with runs submitted through web interface right now.
 - Experimental support for docker (#1028)
 
 - dataone_download.R:
-  - Added progress messages to indicate that the function is working during longer downloads via PEcAn logger. 
-  - Store path to downloaded data as newdir_D1 so that the download app can call this path. 
-  
-- shiny/Data-Ingest 
+  - Added progress messages to indicate that the function is working during longer downloads via PEcAn logger.
+  - Store path to downloaded data as newdir_D1 so that the download app can call this path.
+
+- shiny/Data-Ingest
   - Download data from DataONE to a temporary directory, display the contents of that directory, and then move files from the temporary directory to dbfiles
   - Upload files from local machines (via drag and drop on some browsers), display files, and then move these files to a directory in dbfiles.
-  - Spinner displays when class "shiny-busy" is invoked during the dataONE download process. In this way, users can be sure that the app is live and is processing their request. 
-  - Users can now input the name of the destination directory that they wish to create within dbfiles. 
-  - Updated Travis.yml to include librdf0-dev so that it can download redland, datapack, and dataone. 
+  - Spinner displays when class "shiny-busy" is invoked during the dataONE download process. In this way, users can be sure that the app is live and is processing their request.
+  - Users can now input the name of the destination directory that they wish to create within dbfiles.
+  - Updated Travis.yml to include librdf0-dev so that it can download redland, datapack, and dataone.
   - Added Data-Ingest UI (inputs, dbfiles, and formats record UI and some basic server side functionality are online)
-  - Modularized input record, format record, and dbfiles record into shiny modules. This allows the app to be greatly simplified to two, single-page workflows. These functions can also be used "plug-and-play" style elsewhere in PEcAn shiny apps to load in data. 
-  - Replaced modularized input, format and dbfiles records with static "Ingest Workflow" page. On this page, the user can select either importing from dataONE or Uploading from local files. If creating a new format is necessary, the user can click "Create New Format" and a dropdown menu will walk them through this process. 
+  - Modularized input record, format record, and dbfiles record into shiny modules. This allows the app to be greatly simplified to two, single-page workflows. These functions can also be used "plug-and-play" style elsewhere in PEcAn shiny apps to load in data.
+  - Replaced modularized input, format and dbfiles records with static "Ingest Workflow" page. On this page, the user can select either importing from dataONE or Uploading from local files. If creating a new format is necessary, the user can click "Create New Format" and a dropdown menu will walk them through this process.
   - Selected files now autofill name value in input record workflow
   - Store inputs and formats in the global environment
   - "Test BETY" button allows users create a record in BETY with `dbfile.input.insert`
   - Added `input.format.vars` to query the BETYdb
   - New File: `helper.R`
-  - New Function: `auto.name.directory` This function uses the format_name and the site_id for a given input to create a directory name in the style of other dbfiles names. 
+  - New Function: `auto.name.directory` This function uses the format_name and the site_id for a given input to create a directory name in the style of other dbfiles names.
   - `Next Step` buttons progress workflow programmatically
   - New formats-variables UI allows user to create a table of formats-variable records before completing the ingest process
   - Two separate complete Ingest buttons are rendered at the end of the workflow to trigger actions specific to local upload or dataONE download workflows. These buttons are rendered programmatically depending on the state of the selectInputMethod radio button.
   - Converted time inputs to properly merge startDate and startTime with EndDate and EndTime so they can be inserted into the start_date and end_date columns in BETYdb.
   - Error handling introduced using `shinytoastr` package
   - DESCRIPTION: `Depends`: PEcAn.visualization, shinytoastr, shinyWidgets, shinyjs
-  
+
 - pecan/base/db
-  - New File: `input.format.vars.R`. This function registers the format and the (optional) formats_variables record using `db_merge_into`. 
+  - New File: `input.format.vars.R`. This function registers the format and the (optional) formats_variables record using `db_merge_into`.
 
 - `data.atmosphere`
 	- `check_met_input_file` -- Check that target met file conforms to PEcAn meteorology data standard.
-	- `get_cf_variables_table` -- Retrieve CF variables table as a `data.frame` 
+	- `get_cf_variables_table` -- Retrieve CF variables table as a `data.frame`
 
 
 - docker:
@@ -342,7 +645,7 @@ This is a major change:
   - SIPNET docker image which works with PEcAn docker stack
   - Data container that will download and install demo data in /data folder
 
-  
+
 ### Removed
   - pecan.worldmap function no longer used, dropped from visualization package
   - shiny/Data-Ingest/DESCRIPTION no longer `DEPENDS` on `shinyFiles` or `shinycssloaders`
@@ -351,9 +654,11 @@ This is a major change:
 - PEcAn.utils functions run.write.configs and runModule.run.write.configs have been moved to PEcAn.workflow. The versions in PEcAn.utils are deprecated and will be removed in a future release.
 - Fixed Git instructions and remote execution instructions.
 - Five functions from PEcAn.utils functions have been moved to other packages. The versions in PEcAn.utils are deprecated, will not be updated with any new features, and will be removed in a future release.
-  - run.write.configs and runModule.run.write.configs have been moved to PEcAn.workflow 
+  - run.write.configs and runModule.run.write.configs have been moved to PEcAn.workflow
   - read.ensemble.output, get.ensemble.samples and write.ensemble.configs have been moved to PEcAn.uncertainty
-- Change the way packages are checked for and called in SHINY apps. DESCRIPTION files in SHINY apps are not the place to declare pacakge dpendencies.    
+- Change the way packages are checked for and called in SHINY apps. DESCRIPTION files in SHINY apps are not the place to declare pacakge dpendencies.
+
+
 
 ## [1.5.3] - 2018-05-15
 
@@ -376,12 +681,12 @@ This is a major change:
 - Added new model package (PEcAn.dvmdostem) and initial wrappers for integration of the DVM-DOS-TEM model and tested.
 - PEcAn now supports PFTs whose members are cultivars rather than species, and will automatically restrict the meta-analysis to matching records, e.g. runs with a PFT containing only Panicum virgatum 'Cave-In-Rock' will not use observations from Panicum virgatum 'Alamo', but a PFT containing the whole species will use observations from both. However, there is not yet any BETYdb interface to *create* cultivar-PFTs other than manual SQL.
 - New base package `PEcAn.workflow`, for functions used to perform the each major step of the analysis. These were previously scattered in other base packages.
-- Added PR review time estimate to PR template 
+- Added PR review time estimate to PR template
 - New set of `PEcAn.logger` functions similar to `stopifnot` to facilitate assertive programming: `severeifnot`, `errorifnot`, `warnifnot`, `infoifnot`, `debugifnot`
 - PEcAnRTM:
     - Exposed PROSPECT absorption coefficients and `gpm()` function ("generalized plate model"), facilitating experimentation with different absorption coefficients
     - Added `spectra` S3 class and methods for subsetting (e.g. `myspec[[400:700]]`), plotting (`plot()` and `matplot()`), and combining spectra by wavelength.
-    - Added `resample` functions for quickly resampling spectra (and, more generally, vectors and functions) to different dimensions. 
+    - Added `resample` functions for quickly resampling spectra (and, more generally, vectors and functions) to different dimensions.
     - `EDR` API has been revised. Setup has been refactored from EDR via new `setup_edr` function, which relies on the ED utilities (see `PEcAn.ED2` below), and the `EDR` function now focuses only on execution. Also, added new `params2edr` function to make it easy to convert complex EDR parameters list to flat parameter vector required by `invert_bt` (or other optimization functions).
 - PEcAn.ED2:
     - New set of utilities for working with ED meteorology and vegetation inputs, and the ED2IN file. Existing PEcAn code has been revised to use these utilities.
@@ -404,8 +709,10 @@ This is a major change:
 - Replaced `rhdf5` library with `hdf5r`, a more modern alternative that is available on CRAN.
 - PEcAn.DB function `runModule.get.trait.data` has been moved to the new PEcAn.workflow package to avoid a circular package dependency between PEcAn.DB and PEcAn.settings.
 - Major documentation refactoring. The documentation names are now directly tied to the order in which they are rendered, and all `Rmd` files in all subdirectories of the documentation source are rendered by default. The overall structure of the documentation has been revised for clarity and cohesiveness.
-- Edited met2model.ED2 to not enforce leap years. 
+- Edited met2model.ED2 to not enforce leap years.
 - Integrate demo 1 into basic user guide
+
+
 
 ## [1.5.2] - 2017-12-07
 
@@ -431,6 +738,8 @@ This is a major change:
 	- `fqdn` moved to `PEcAn.remote`
 - PEcAnRTM: Removed effective sample size normalization from likelihood calculation. It was giving weird results.
 
+
+
 ## [1.5.1] - 2017-10-05
 
 ### Fixes
@@ -454,7 +763,7 @@ This is a major change:
 - Added a new retry.func() to base/utils to provide ability to re-try a function X times before stopping.  Currently using this function in the download.CRUNCEP() function to handle slow responses from THREDDS.
 - Reformatted call_MODIS netcdf output to reflect the orientation of the MODIS grid
 - Remote execution is more robust to errors in the submission process, not just the actual model execution
-- PRELES model run script bug fix 
+- PRELES model run script bug fix
 
 ### Added
 - Functionality to pass hyperparameters via settings
@@ -467,7 +776,7 @@ This is a major change:
 - #1594 shiny/workflowPlot Load outputs from multiple runs of the model
 - #1594 shiny/workflowPlot Ways to toggle geometries (e.g. geom_point vs. geom_line).
 - #1594 shiny/workflowPlot Smoothing using geom_smooth (Slider for specifying moving window width)
-- #1594 shiny/workflowPlot Comparing model output vs loaded data according to [tutorial](https://github.com/PecanProject/pecan/blob/develop/documentation/tutorials/AnalyzeOutput/modelVSdata.Rmd) 
+- #1594 shiny/workflowPlot Comparing model output vs loaded data according to [tutorial](https://github.com/PecanProject/pecan/blob/develop/documentation/tutorials/AnalyzeOutput/modelVSdata.Rmd)
 - Allow SIPNET and DALEC met files and model2netcdf to start or end mid year
 - A Pre-release database clean up script that deletes unused/unassosiated entries from the database
 
@@ -482,7 +791,9 @@ This is a major change:
 - Rpreles and Maeswrap package moved to suggest checked for within package function.
 
 
+
 ## [1.5.0] - 2017-07-13
+
 ### Added
 - Added cron job and script for the sync of the database.
 - Added PEcAn.utils::download.file() to allow for use of alternative FTP programs
@@ -499,6 +810,8 @@ This is a major change:
 - upscale_met now accepts ~any valid CF file (not just full years), retains correct time units, and respects the previously ignored `overwrite` parameter
 - Better date handling in BioCro functions
 
+
+
 ## [1.4.10.1] - 2017-04-18
 
 ### Changed
@@ -506,6 +819,7 @@ This is a major change:
 - Update Git workflow in Documentation
 - download.CRUNCEP now uses CF-compliant time units (days since start of year instead of "secs")
 - Bugfixes in met.process
+
 
 
 ## [1.4.10] - 2017-03-27
@@ -521,6 +835,8 @@ Documentation
 ### Removed
 - Ameriflux is no longer selectable from the web gui [#1291](https://github.com/PecanProject/pecan/issues/1291)
 
+
+
 ## [1.4.9] - 2016-12-10
 Benchmarking, code cleanup
 
@@ -531,8 +847,12 @@ Benchmarking, code cleanup
 - no more build.sh, using Makefile
 - Lots of code cleanup thanks to @bpbond
 
+
+
 ## [1.4.8] - 2016-08-11
 Camp PEON: Assimilation, multi-site, soil params, Maespa, LPJ-GUESS, improvements to web & tutorials
+
+
 
 ## [1.4.7] - 2016-07-13
 CMIP5, Shiny, FLUXNET2015, Global Sensitivity

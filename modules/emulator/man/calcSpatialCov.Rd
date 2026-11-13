@@ -4,7 +4,16 @@
 \alias{calcSpatialCov}
 \title{calcSpatialCov}
 \usage{
-calcSpatialCov(x, ...)
+calcSpatialCov(d, psi, tau, ...)
+}
+\arguments{
+\item{d}{either a spatial distance matrix or a list of component spatial distance matrices}
+
+\item{psi}{spatial corr}
+
+\item{tau}{spatial var}
+
+\item{...}{Additional arguments}
 }
 \description{
 calcSpatialCov

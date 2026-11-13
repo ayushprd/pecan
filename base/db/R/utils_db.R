@@ -1,11 +1,3 @@
-#-------------------------------------------------------------------------------
-# Copyright (c) 2012 University of Illinois, NCSA.
-# All rights reserved. This program and the accompanying materials
-# are made available under the terms of the
-# University of Illinois/NCSA Open Source License
-# which accompanies this distribution, and is available at
-# http://opensource.ncsa.illinois.edu/license.html
-#-------------------------------------------------------------------------------
 
 .db.utils <- new.env()
 .db.utils$created <- 0
@@ -322,7 +314,7 @@ db.exists <- function(params, write = TRUE, table = NA) {
   }
 
   #check table's privilege about read and write permission
-  user.permission <<- tryCatch({
+  user.permission <- tryCatch({
     invisible(db.query(
       paste0("SELECT privilege_type FROM information_schema.role_table_grants ",
              "WHERE grantee='", params$user,
@@ -380,7 +372,7 @@ db.exists <- function(params, write = TRUE, table = NA) {
     db.close(con)
     invisible(NULL)
   })
-  if (is.null(read.result)) return(invisible(FALSE))
+  if (is.null(get.key)) return(invisible(FALSE))
 
   # If write permission not requested, we're done!
   if (!write) return(invisible(TRUE))

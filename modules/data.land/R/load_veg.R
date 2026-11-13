@@ -1,8 +1,21 @@
-##' Function uses load_data{benchmark} to get veg data
-##' @name load_veg
-##' @title load_veg
-##' @export
-##' @author Istem Fer
+#' load_veg
+#'
+#' uses `PEcAn.benchmark::load_data()` to get veg data
+#'
+#' @param new_site list passed to `load_data`
+#' @param start_date,end_date date range to look up
+#' @param source_id input id to look up in DB
+#' @param source name of data source (used in file naming)
+#' @param icmeta metadata for initial conditions
+#' @param format_name file format to look for
+#' @param machine_host hostname of machine where the data lives
+#' @param dbparms parameters to use when opening connection to database
+#' @param outfolder path to write results
+#' @param overwrite Logical: replace existing files? NOTE: Currently ignored!
+#' @param ... Additional arguments, currently ignored
+#'
+#' @export
+#' @author Istem Fer
 load_veg <- function(new_site, start_date, end_date,
                      source_id, source, icmeta = NULL, format_name = NULL,
                      machine_host, dbparms, outfolder, overwrite = FALSE, ...){
@@ -27,6 +40,11 @@ load_veg <- function(new_site, start_date, end_date,
   # query format info
   format     <- PEcAn.DB::query.format.vars(bety = con, input.id = source_id)
 
+  if (!requireNamespace("PEcAn.benchmark", quietly = TRUE)) {
+    PEcAn.logger::logger.severe(
+      "Package 'PEcAn.benchmark' is required for loading vegetation data but is not installed.",
+      "Please install it with: install.packages('PEcAn.benchmark')")
+  }
   # load_data{benchmark}
   obs        <- PEcAn.benchmark::load_data(data.path = data_path, format, site = new_site)
 
@@ -77,11 +95,11 @@ load_veg <- function(new_site, start_date, end_date,
   veg_info[[2]] <- cbind(obs, tmp)
 
   #--------------------------------------------------------------------------------------------------#
-  # Write vegettion data as rds, return results to convert.input
+  # Write vegettion data as rds, return results to convert_input
 
   # need check for overwrite
   sppfilename <- write_veg(outfolder, start_date, veg_info = veg_info, source)
-  # Build results dataframe for convert.input
+  # Build results dataframe for convert_input
   results <- data.frame(file = sppfilename,
                         host = machine_host,
                         mimetype = "application/rds",
@@ -90,7 +108,7 @@ load_veg <- function(new_site, start_date, end_date,
                         enddate = end_date,
                         dbfile.name = basename(sppfilename),
                         stringsAsFactors = FALSE)
-  ### return for convert.inputs
+  ### return for convert_inputs
   return(invisible(results))
 
 

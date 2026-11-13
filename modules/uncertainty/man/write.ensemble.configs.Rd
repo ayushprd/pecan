@@ -5,16 +5,29 @@
 \title{Write ensemble config files}
 \usage{
 write.ensemble.configs(
+  input_design,
+  ensemble.size,
   defaults,
   ensemble.samples,
   settings,
   model,
   clean = FALSE,
   write.to.db = TRUE,
-  restart = NULL
+  restart = NULL,
+  rename = FALSE,
+  run_descriptions = NULL,
+  ensemble.id = NULL
 )
 }
 \arguments{
+\item{input_design}{design matrix describing sampled inputs (see
+`run.write.configs()`). Columns named after `settings$run$inputs` tags give
+1-based indices into each input's `path` list and rows follow run order.
+Requires `nrow(input_design) >= ensemble.size`;
+extra rows are ignored.}
+
+\item{ensemble.size}{size of ensemble}
+
 \item{defaults}{pft}
 
 \item{ensemble.samples}{list of lists supplied by \link{get.ensemble.samples}}
@@ -27,21 +40,43 @@ write.ensemble.configs(
 
 \item{write.to.db}{logical: Record this run in BETY?}
 
-\item{restart}{In case this is a continuation of an old simulation. restart needs to be a list with name tags of runid, inputs, new.params (parameters), new.state (initial condition), ensemble.id (ensemble id), start.time and stop.time.See Details.}
+\item{restart}{In case this is a continuation of an old simulation.
+Needs to be a list with name tags of runid, inputs, new.params (parameters),
+new.state (initial condition), ensemble.id (ensemble id), start.time and stop.time.
+See Details.}
+
+\item{rename}{Decide if we want to rename previous output files, for example convert from sipnet.out to sipnet.2020-07-16.out.}
+
+\item{run_descriptions}{optional data.frame, one row per design row, with
+\code{id}, \code{paramlist} and the \code{pft_name}, \code{trait},
+\code{quantile} and \code{type} the run manifest carries. Lets a caller that
+already knows what each run is describe them, instead of these being
+generated as ensemble members.}
+
+\item{ensemble.id}{optional id for this set of runs, used instead of the one
+in \code{settings$ensemble$id}.}
 }
 \value{
-list, containing $runs = data frame of runids, $ensemble.id = the ensemble ID for these runs and $samples with ids and samples used for each tag.  Also writes sensitivity analysis configuration files as a side effect
+list, containing
+ $runs = data frame of runids,
+ $ensemble.id = the ensemble ID for these runs,
+ and $samples with ids and samples used for each tag.
+ Also writes sensitivity analysis configuration files as a side effect
 }
 \description{
 Writes config files for use in meta-analysis and returns a list of run ids.
-Given a pft.xml object, a list of lists as supplied by get.sa.samples, 
+Given a pft.xml object, a list of lists as supplied by get.sa.samples,
 a name to distinguish the output files, and the directory to place the files.
 }
 \details{
-The restart functionality is developed using model specific functions by calling write_restart.modelname function. First, you need to make sure that this function is already exist for your desired model.See here \url{https://pecanproject.github.io/pecan-documentation/master/pecan-models.html}
-new state is a dataframe with a different column for each state variable. The number of the rows in this dataframe needs to be the same as the ensemble size.
-State variables that you can use for setting up the intial conditions differs for different models. You may check the documentation of the write_restart.modelname your model.
-The units for the state variables need to be in the PEcAn standard units which can be found in \link{standard_vars}.
+The restart functionality is developed using model specific functions by calling write_restart.modelname function.
+First, you need to make sure that this function is already exist for your desired model.
+See here \url{https://pecanproject.github.io/pecan-documentation/latest/pecan-models.html}.
+new state is a dataframe with a different column for each state variable.
+The number of the rows in this dataframe needs to be the same as the ensemble size.
+The state variables that you can use for setting up initial conditions are model specific.
+Check the documentation of the write_restart.<modelname> function for the model you are using.
+The units for the state variables need to be in the PEcAn standard units which can be found in \link[PEcAn.utils]{standard_vars}.
 new.params also has similar structure to ensemble.samples which is sent as an argument.
 }
 \author{

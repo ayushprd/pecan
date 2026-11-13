@@ -6,25 +6,22 @@
 
 # this needs to be at the top, what version are we building
 ARG IMAGE_VERSION="latest"
+ARG PARENT_IMAGE="pecan/models"
 
 # ----------------------------------------------------------------------
 # BUILD MODEL BINARY
 # ----------------------------------------------------------------------
-FROM debian:stretch as model-binary
+FROM ${PARENT_IMAGE}:${IMAGE_VERSION} as model-binary
 
 # Some variables that can be used to set control the docker build
 ARG MODEL_VERSION=git
 
 # install dependencies
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-       build-essential \
-       curl \
-       gfortran \
-       git \
-       libhdf5-dev \
-       libopenmpi-dev \
-    && rm -rf /var/lib/apt/lists/*
+#RUN apt-get update \
+#    && apt-get install -y --no-install-recommends \
+#       libhdf5-dev \
+#       libopenmpi-dev \
+#    && rm -rf /var/lib/apt/lists/*
 
 # download, unzip and build ed2
 WORKDIR /src
@@ -39,17 +36,17 @@ RUN git clone https://github.com/model/repo.git \
 # ----------------------------------------------------------------------
 # BUILD PECAN FOR MODEL
 # ----------------------------------------------------------------------
-FROM pecan/models:${IMAGE_VERSION}
+FROM ${PARENT_IMAGE}:${IMAGE_VERSION}
 
 # ----------------------------------------------------------------------
 # INSTALL MODEL SPECIFIC PIECES
 # ----------------------------------------------------------------------
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-       libgfortran3 \
-       libopenmpi2 \
-    && rm -rf /var/lib/apt/lists/*
+#RUN apt-get update \
+#    && apt-get install -y --no-install-recommends \
+#       libgfortran3 \
+#       libopenmpi2 \
+#    && rm -rf /var/lib/apt/lists/*
 
 # ----------------------------------------------------------------------
 # SETUP FOR SPECIFIC MODEL

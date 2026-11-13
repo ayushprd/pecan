@@ -2,7 +2,7 @@
 /**
  * Copyright (c) 2012 University of Illinois, NCSA.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the 
+ * are made available under the terms of the
  * University of Illinois/NCSA Open Source License
  * which accompanies this distribution, and is available at
  * http://opensource.ncsa.illinois.edu/license.html
@@ -42,33 +42,37 @@ $stmt->closeCursor();
 $start = substr($workflow['start_date'], 0, 4);
 $end = substr($workflow['end_date'], 0, 4);
 $folder = $workflow['folder'];
-$notes = htmlspecialchars($workflow['notes']);
+$folder_exists = is_dir($folder);
+$notes = htmlspecialchars($workflow['notes'] ?? '');
 if ($workflow['value'] != '') {
   $params = json_decode($workflow['value'], true);
 } else {
   $params = array();
 }
 if (isset($params['hostname'])) {
-    $hostname = "&hostname=${params['hostname']}";
+    $hostname = "&hostname={$params['hostname']}";
 }
 
 # check to make sure all is ok
-$error=false;
-if (file_exists($folder . DIRECTORY_SEPARATOR . "STATUS")) {
-  $status=file($folder . DIRECTORY_SEPARATOR . "STATUS");
-  if ($status === FALSE) {
+$error = false;
+$status = array();
+if ($folder_exists) {
+  if (file_exists($folder . DIRECTORY_SEPARATOR . "STATUS")) {
+    $status = file($folder . DIRECTORY_SEPARATOR . "STATUS");
+    if ($status === FALSE) {
+      $status = array();
+      $error = true;
+    }
+    foreach ($status as $line) {
+      $data = explode("\t", $line);
+      if ((count($data) >= 4) && ($data[3] == 'ERROR')) {
+        $error = true;
+      }
+    }
+  } else {
     $status = array();
     $error = true;
   }
-  foreach ($status as $line) {
-    $data = explode("\t", $line);
-    if ((count($data) >= 4) && ($data[3] == 'ERROR')) {
-      $error = true;
-    }
-  }
-} else {
-  $status = array();
-  $error=true;
 }
 
 # check the PEcAn folder
@@ -84,7 +88,7 @@ if (is_dir($folder)) {
 if (is_dir("$folder/ensemble")) {
   foreach(recursive_scandir("$folder/ensemble", "ensemble") as $file) {
     if ($file[0] != ".") {
-      $pecanfiles[] = $file;      
+      $pecanfiles[] = $file;
     }
   }
 }
@@ -104,7 +108,7 @@ if (is_dir("$folder/pft")) {
       continue;
     }
     $pfts[$pft] = array();
-    foreach(recursive_scandir("$folder/pft/${pft}", "") as $file) {
+    foreach(recursive_scandir("$folder/pft/{$pft}", "") as $file) {
       if (is_dir("$folder/pft/$pft/$file")) {
         continue;
       }
@@ -145,7 +149,7 @@ if (is_dir("$folder/run")) {
       $outfile[$runid][] = $file;
       if (preg_match('/^\d\d\d\d.nc$/', $file)) {
         $year = substr($file, 0, 4);
-        $vars = explode("\n", file_get_contents("${folder}/out/${runid}/${file}.var"));
+        $vars = explode("\n", file_get_contents("{$folder}/out/{$runid}/{$file}.var"));
         $outplot[$runid][$year] = array_filter($vars);
         sort($outplot[$runid][$year]);
       }
@@ -253,7 +257,7 @@ foreach ($status as $line) {
       foreach($y as $s) {
         $kv = explode(" ", $s, 2);
         if ($kv[1] == '') $kv[1] = $kv[0];
-        print "  outplot['$key']['$x']['{$kv[0]}'] = '${kv[1]}';\n";
+        print "  outplot['$key']['$x']['{$kv[0]}'] = '{$kv[1]}';\n";
       }
     }
   }
@@ -265,14 +269,20 @@ foreach ($status as $line) {
   function nextStep() {
     $("#formnext").submit();
   }
-  
+
   function showGraph() {
     var run = $('#runid').val();
     var year = $('#graphyear').val();
     var xvar = $('#graphxvar').val();
     var yvar = $('#graphyvar').val();
-    var url="dataset.php?workflowid=<?php echo $workflowid; ?>&type=plot&run=" + run + "&year=" + year + "&xvar=" + xvar + "&yvar=" + yvar + "&width=" + ($("#output").width()-10) + "&height=" + ($("#output").height() - 10);
-    $("#output").html("<img src=\"" + url + "\">");    
+    var width = $("#output").width() - 10;
+    var height = $("#output").height() - 10;
+<?php if ($api_url == "") {?>
+    var url="dataset.php?workflowid=<?php echo $workflowid; ?>&type=plot&run=" + run + "&year=" + year + "&xvar=" + xvar + "&yvar=" + yvar + "&width=" + width + "&height=" + height;
+<?php } else { ?>
+    var url="<?php echo $api_url; ?>runs/" + run + "/graph/" + year + "/" + yvar + "?xvar=" + xvar +"&width=" + width + "&height=" + height;
+<?php } ?>
+    $("#output").html("<img src=\"" + url + "\">");
   }
 
   function showInputFile() {
@@ -322,10 +332,10 @@ foreach ($status as $line) {
   function updatePFT() {
     var pft = $('#pft').val();
     $('#pftfile').empty();
-    $.each(pfts[pft], function(key, value) {   
+    $.each(pfts[pft], function(key, value) {
          $('#pftfile')
              .append($("<option></option>")
-             .text(value)); 
+             .text(value));
     });
   }
 
@@ -337,23 +347,23 @@ foreach ($status as $line) {
       $.each(Object.keys(outplot[run]), function(key, value) {
            $('#graphyear')
                .append($("<option></option>")
-               .text(value)); 
+               .text(value));
       });
       updateGraphYear();
     }
 
     $('#inpfile').empty();
-    $.each(inpfile[run], function(key, value) {   
+    $.each(inpfile[run], function(key, value) {
          $('#inpfile')
              .append($("<option></option>")
-             .text(value)); 
+             .text(value));
     });
 
     $('#outfile').empty();
-    $.each(outfile[run], function(key, value) {   
+    $.each(outfile[run], function(key, value) {
          $('#outfile')
              .append($("<option></option>")
-             .text(value)); 
+             .text(value));
     });
   }
 
@@ -372,11 +382,11 @@ foreach ($status as $line) {
          $('#graphxvar')
              .append($("<option></option>")
                 .attr("value", key)
-                .text(value)); 
+                .text(value));
          $('#graphyvar')
              .append($("<option></option>")
                 .attr("value", key)
-                .text(value)); 
+                .text(value));
     });
 <?php if ($xaxis) { ?>
     $('#graphxvar')
@@ -438,7 +448,7 @@ foreach ($status as $line) {
       <select id="graphyear" onChange="updateGraphYear();">
       </select>
       <div class="spacer"></div>
-      
+
 <?php if ($xaxis) { ?>
       <label>X-axis</label>
       <select id="graphxvar">
@@ -456,9 +466,9 @@ foreach ($status as $line) {
       <select id="graphyvar">
       </select>
       <div class="spacer"></div>
-      
+
       <input id="home" type="button" value="Plot run/year/variable" onclick="showGraph();" />
-            
+
       <a href="../shiny/workflowPlot/?workflow_id=<?php echo $workflowid; ?>" target="_blank">Open SHINY</a>
 
       <p></p>
@@ -496,7 +506,7 @@ foreach ($status as $line) {
 ?>
       </select>
       <div class="spacer"></div>
-      
+
       <label>Output</label>
       <select id="pftfile">
       </select>
@@ -515,16 +525,16 @@ foreach ($status as $line) {
       </select>
       <div class="spacer"></div>
       <input id="home" type="button" value="Show File" onclick="showPEcAnFile();" />
-      
+
       <div class="spacer"></div>
     </form>
-    
+
     <form id="formprev" method="POST" action="history.php">
 <?php if ($offline) { ?>
       <input name="offline" type="hidden" value="offline">
 <?php } ?>
     </form>
-    
+
     <form id="formnext" method="POST" action="02-modelsite.php">
 <?php if ($offline) { ?>
       <input name="offline" type="hidden" value="offline">
@@ -535,24 +545,53 @@ foreach ($status as $line) {
     <span id="error" class="small">&nbsp;</span>
     <input id="prev" type="button" value="History" onclick="prevStep();" />
 <?php if (!$authentication || (get_page_acccess_level() <= $min_run_level)) { ?>
-    <input id="next" type="button" value="Start Over" onclick="nextStep();"/>    
+    <input id="next" type="button" value="Start Over" onclick="nextStep();"/>
 <?php } ?>
     <div class="spacer"></div>
-<?php whoami(); ?>    
+<?php whoami(); ?>
 <p>
-  <a href="https://pecanproject.github.io/pecan-documentation/master/" target="_blank">Documentation</a>
+  <a href="https://pecanproject.github.io/documentation/develop/" target="_blank">Documentation</a>
   <br>
-  <a href="https://join.slack.com/t/pecanproject/shared_invite/enQtMzkyODUyMjQyNTgzLWEzOTM1ZjhmYWUxNzYwYzkxMWVlODAyZWQwYjliYzA0MDA0MjE4YmMyOTFhMjYyMjYzN2FjODE4N2Y4YWFhZmQ" target="_blank">Chat Room</a>
+  <a href="https://join.slack.com/t/pecanproject/shared_invite/enQtMzkyODUyMjQyNTgzLWEzOTM1ZjhmYWUxNzYwYzkxMWVlODAyZWQwYjliYzA0MDA0MjE4YmMyOTFhMjYyMjYzN2FjODE4N2Y4YWFhZmQ" target="_blank">Slack Channel</a>
   <br>
-  <a href="http://pecanproject.github.io/Report_an_issue.html" target="_blank">Bug Report</a>
+  <a href="https://github.com/PecanProject/pecan/issues/new/choose" target="_blank">Bug Report</a>
 </p>
   </div>
   <div id="output">
-<?php if ($notes == "") {
-
-}
-?>
-  <h2>Execution Status</h2>
+<?php if (!$folder_exists) { ?>
+  <h2>Workflow Files Not Found Locally</h2>
+  <p>The folder <code><?php echo htmlspecialchars($folder); ?></code> was not found on
+  this machine. This workflow may have been run on a different machine. Below is the
+  information available from the database.</p>
+  <table border=1>
+    <tr>
+      <th>Workflow ID</th>
+      <td><?php echo htmlspecialchars($workflowid); ?></td>
+    </tr>
+    <tr>
+      <th>Start Date</th>
+      <td><?php echo htmlspecialchars($workflow['start_date']); ?></td>
+    </tr>
+    <tr>
+      <th>End Date</th>
+      <td><?php echo htmlspecialchars($workflow['end_date']); ?></td>
+    </tr>
+<?php if (!empty($params['hostname'])) { ?>
+    <tr>
+      <th>Hostname</th>
+      <td><?php echo htmlspecialchars($params['hostname']); ?></td>
+    </tr>
+<?php } ?>
+<?php if ($notes != '') { ?>
+    <tr>
+      <th>Notes</th>
+      <td><?php echo $notes; ?></td>
+    </tr>
+<?php } ?>
+  </table>
+  <p>To view the full results, please access the machine where this workflow was
+  originally run, or use the <strong>Start Over</strong> button to begin a new run.</p>
+<?php } else { ?>
   <h2>Execution Status</h2>
   <table border=1>
     <tr>
@@ -565,26 +604,21 @@ foreach ($status as $line) {
 foreach ($status as $line) {
   $data = explode("\t", $line);
   echo "    <tr>\n";
-  if ($data[0] == "BrownDog") {
-    echo "      <td><a href=\"http://browndog.ncsa.illinois.edu\">";
-    echo "${data[0]} <img src=\"images/browndog-small-transparent.gif\" alt=\"BrownDog\" width=\"16px\"></a></td>\n";
-  } else {
-    echo "      <td>${data[0]}</td>\n";    
-  }
+  echo "      <td>{$data[0]}</td>\n";
   if (count($data) >= 2) {
-    echo "      <td>${data[1]}</td>\n";
+    echo "      <td>{$data[1]}</td>\n";
   } else {
-    echo "      <td></td>\n";    
+    echo "      <td></td>\n";
   }
   if (count($data) >= 3) {
-    echo "      <td>${data[2]}</td>\n";
+    echo "      <td>{$data[2]}</td>\n";
   } else {
-    echo "      <td></td>\n";    
+    echo "      <td></td>\n";
   }
   if (count($data) >= 4) {
-    echo "      <td>${data[3]}</td>\n";
+    echo "      <td>{$data[3]}</td>\n";
   } else {
-    echo "      <td>RUNNING</td>\n";        
+    echo "      <td>RUNNING</td>\n";
   }
   echo "    <t/r>\n";
 }
@@ -608,6 +642,8 @@ foreach ($status as $line) {
   running page which will update continuously.</p>
 <?php } ?>
   <h2>Workflow Results</h2>
+<?php } ?>
+<?php if ($folder_exists) { ?>
 <?php if ($finished && !$error) { ?>
   <p>On the top left, if you have more than one run, you can select the specific run you are
   interested in. Once you have selected a run you can create graphs from the outputs of the
@@ -624,7 +660,7 @@ foreach ($status as $line) {
   model outputs as well as the logfiles of the model run. You can look at these logfiles
   to see if the model run was successful. In case of a successful model execution you will
   also find the converted outputs of the model into
-  <a targe="MsTMIP" href="http://nacp.ornl.gov/">MsTMIP</a> format.</p> 
+  <a targe="MsTMIP" href="http://nacp.ornl.gov/">MsTMIP</a> format.</p>
 <?php } ?>
   <p>The next selection will list the PFTs and all the files that were used to generate the
   input data for the models based on the PFT and trait information available.</p>
@@ -632,17 +668,20 @@ foreach ($status as $line) {
   script that was executed, as well as the pecan.xml that contains all the parameters used
   during the workflow execution. You will also find here the output files generated by the
   workflow execution (workflow.Rout and workflow2.Rout).</p>
+<?php } ?>
   </div>
   <div id="footer"><?php echo get_footer(); ?></div>
 </div>
 </body>
   <script type="text/javascript">
+<?php if ($folder_exists) { ?>
     updateRun();
     updatePFT();
-  </script>
+<?php } ?>
+</script>
 </html>
 
-<?php 
+<?php
 $pdo = null;
 
 function recursive_scandir($dir, $base) {
@@ -658,7 +697,7 @@ function recursive_scandir($dir, $base) {
       if ($base == "") {
         $files[] = $file;
       } else {
-        $files[] = "$base/$file"; 
+        $files[] = "$base/$file";
       }
     }
   }

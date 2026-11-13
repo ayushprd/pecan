@@ -1,8 +1,6 @@
 context("read.output")
 
-testdir = file.path(tempfile(), "readtest")
-dir.create(testdir, recursive = TRUE)
-teardown(unlink(testdir, recursive = TRUE))
+testdir <- withr::local_tempdir()
 
 
 test_that("returns a list or dataframe as requested", {
@@ -59,6 +57,21 @@ test_that("accepts start and end years as string, number, datetime", {
         expect_length(res_end[["posix"]], 365 * 2)
 })
 
+test_that("accepts NULL as synonym for NA in start.year and end.year", {
+  nulldir <- withr::local_tempdir()
+  times_to_netcdf(0:364, "days since 2001-01-01", nulldir, "2001.nc")
+  times_to_netcdf(0:364, "days since 2002-01-01", nulldir, "2002.nc")
+
+  out_log <- capture.output(type = "message", {
+    res_na   <- read.output(runid = "", outdir = nulldir, variables = "Y",
+                            start.year = NA, end.year = NA, dataframe = TRUE)
+    res_null <- read.output(runid = "", outdir = nulldir, variables = "Y",
+                            start.year = NULL, end.year = NULL, dataframe = TRUE)
+  })
+  expect_equivalent(res_na, res_null)
+  expect_length(res_null$posix, 365 * 2)
+})
+
 test_that("handles arbitrary time offsets", {
 	times_to_netcdf(365:730, "days since 2003-01-01", testdir, "2004.nc")
 	times_to_netcdf( ((0:364)+916) * 24, "hours since 2002-06-30", testdir, "2005.nc")
@@ -74,12 +87,8 @@ test_that("handles arbitrary time offsets", {
 	expect_equal(mixedres$posix, as.POSIXct((0:730)*86400, origin = "2004-01-01", tz = "UTC"))
 })
 
-empty_testdir <- tempfile()
-dir.create(empty_testdir)
-teardown(unlink(empty_testdir, recursive = TRUE))
-
 test_that("Correct behavior when no NetCDF files present", {
-  expected <- "no netCDF files of model output present"
+  empty_testdir <- withr::local_tempdir()
   out_log <- capture.output(type = "message", {
     out <- read.output(runid = "", outdir = empty_testdir,
                 start.year = 2001, end.year = 2002)
@@ -87,22 +96,50 @@ test_that("Correct behavior when no NetCDF files present", {
   expect_match(out_log, "no netCDF files of model output present", all = FALSE)
   expect_match(out_log, "No files found. Returning all NA", all = FALSE)
   expect_equal(out, list(NA))
+
+  out_log_df <- capture.output(type = "message", {
+    out_df <- read.output(runid = "", outdir = empty_testdir,
+                          start.year = 2001, end.year = 2002,
+                          dataframe = TRUE, variables = "AGB")
+  })
+  expect_match(out_log_df, "No files found. Returning all NA", all = FALSE)
+  expect_equal(out_df, data.frame(AGB = NA, posix = NA, year = NA))
+  str(out_df)
 })
 
-custom_testdir <- tempfile()
-dir.create(custom_testdir)
-teardown(unlink(custom_testdir, recursive = TRUE))
 test_that("Correctly read all variables, from custom ncfiles", {
+  custom_testdir <- withr::local_tempdir()
   ncfiles <- file.path(custom_testdir, c("a.nc", "b.nc", "c.nc"))
   zzz <- lapply(ncfiles, example_netcdf, varnames = c("x", "y", "z"))
   out_log <- capture.output(type = "message", {
     out <- read.output(ncfiles = ncfiles, variables = NULL)
   })
-  expect_match(out_log, "No start or end year provided", all = FALSE)
+  expect_false(any(grepl("No start or end year provided", out_log)))
   expect_match(out_log, "Invalid \\(or missing\\) origin year", all = FALSE)
-  expect_match(out_log, "Reading output for all variables", all = FALSE)
-  expect_match(out_log, "Result summary:", all = FALSE)
-  expect_match(out_log, " +Mean +Median", all = FALSE)
+  expect_false(any(grepl("Reading output for all variables", out_log)))
+  expect_false(any(grepl("Result summary:", out_log)))
   expect_named(out, c("x", "y", "z"))
   for (v in c("x", "y", "z")) expect_length(out[[!!v]], 365 * 3)
+
+  verbose_log <- capture.output(type = "message", {
+    verbose_out <- read.output(
+      ncfiles = ncfiles,
+      variables = NULL,
+      verbose = TRUE
+    )
+  })
+  expect_match(verbose_log, "No start or end year provided", all = FALSE)
+  expect_match(verbose_log, "Reading the following files", all = FALSE)
+  expect_match(verbose_log, "Variables not specified", all = FALSE)
+  expect_named(verbose_out, c("x", "y", "z"))
+
+  summary_log <- capture.output(type = "message", {
+    summary_out <- read.output(
+      ncfiles = ncfiles,
+      variables = NULL,
+      print_summary = TRUE
+    )
+  })
+  expect_true(any(grepl("Result summary:", summary_log)))
+  expect_named(summary_out, c("x", "y", "z"))
 })

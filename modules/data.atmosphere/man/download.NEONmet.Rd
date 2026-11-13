@@ -16,7 +16,7 @@ download.NEONmet(
 }
 \arguments{
 \item{sitename}{the NEON ID of the site to be downloaded, used as file name prefix. 
-The 4-letter SITE code  in \href{http://www.neonscience.org/science-design/field-sites/list}{list of NEON sites}}
+The 4-letter SITE code  in \href{https://www.neonscience.org/field-sites/explore-field-sites}{list of NEON sites}}
 
 \item{outfolder}{location on disk where outputs will be stored}
 
@@ -27,6 +27,8 @@ The 4-letter SITE code  in \href{http://www.neonscience.org/science-design/field
 \item{overwrite}{should existing files be overwritten}
 
 \item{verbose}{makes the function output more text}
+
+\item{...}{further arguments, currently ignored}
 }
 \description{
 download.NEONmet
@@ -36,6 +38,11 @@ Uses NEON v0 API to download met data from NEON towers and convert to CF NetCDF
 }
 \examples{
 \dontrun{
-result <- download.NEONmet('HARV','~/','2017-01-01','2017-01-31',overwrite=TRUE)
+result <- download.NEONmet(
+   sitename = 'HARV',
+   outfolder = '~/',
+   start_date = '2017-01-01',
+   end_date = '2017-01-31',
+   overwrite = TRUE)
 }
 }

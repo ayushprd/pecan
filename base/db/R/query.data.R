@@ -1,24 +1,14 @@
-#-------------------------------------------------------------------------------
-# Copyright (c) 2012 University of Illinois, NCSA.
-# All rights reserved. This program and the accompanying materials
-# are made available under the terms of the
-# University of Illinois/NCSA Open Source License
-# which accompanies this distribution, and is available at
-# http://opensource.ncsa.illinois.edu/license.html
-#-------------------------------------------------------------------------------
-
-##--------------------------------------------------------------------------------------------------#
 ##' Function to query data from database for specific species and convert stat to SE
 ##'
-##' @name query.data
-##' @title Query data and transform stats to SE by calling \code{\link{fetch.stats2se}};
 ##' @param trait trait to query from the database
 ##' @param spstr IDs of species to query from, as a single comma-separated string
 ##' @param con database connection
 ##' @param extra.columns other query terms to pass in. If unspecified, retrieves latitude and longitude
 ##' @param ids_are_cultivars if TRUE, ids is a vector of cultivar IDs, otherwise they are species IDs
 ##' @param ... extra arguments
-##' @seealso used in \code{\link{query.trait.data}}; \code{\link{fetch.stats2se}}; \code{\link{transformstats}} performs transformation calculations
+##' @param store.unconverted determines whether or not a copy of the mean and stat fields are returned with _unconverted appended to the column names
+##' @seealso used in \code{\link{query.trait.data}}; \code{\link{fetch.stats2se}};
+##'   \code{\link[PEcAn.utils]{transformstats}} performs transformation calculations
 ##' @author David LeBauer, Carl Davidson
 query.data <- function(
               trait,

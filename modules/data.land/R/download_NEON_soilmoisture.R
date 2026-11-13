@@ -1,5 +1,3 @@
-##' @name download_NEON_soilmoist
-##' @description: 
 ##' Download NEON Soil Water Content and Soil Salinity data by date and site name
 ##' 
 ##' @param site four letter NEON site code name(s). If no site is specified, it will download all of them (chr) (e.g "BART" or c("SRER", "KONA", "BART"))
@@ -17,8 +15,8 @@
 ##' 
 ##' @author Juliette Bateman
 ##' 
-##' @example
-##' \run{
+##' @examples
+##' \dontrun{
 ##' test <- download_NEON_soilmoisture(
 ##'   site = c("SRER", "BART", "KONA"),
 ##'   avg = 30,
@@ -39,7 +37,12 @@ download_NEON_soilmoist <- function(site, avg = "all", var = "all",
                                     outdir) {
   
   
-  #################### Data Download from NEON #################### 
+  if (!requireNamespace("neonUtilities", quietly = TRUE)) {
+    PEcAn.logger::logger.severe(
+      "Package 'neonUtilities' is required for downloading NEON soil moisture data but is not installed.",
+      "Please install it with: install.packages('neonUtilities')")
+  }
+   #################### Data Download from NEON #################### 
   soil.raw = neonUtilities::loadByProduct(dpID = "DP1.00094.001", site = site, avg = avg, startdate = startdate, enddate = enddate, check.size = FALSE)
   
   # Export into new folder in outdir

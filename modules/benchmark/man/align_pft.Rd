@@ -2,7 +2,7 @@
 % Please edit documentation in R/align_pft.R
 \name{align_pft}
 \alias{align_pft}
-\title{align_pft}
+\title{Align vectors of Plant Functional Type and species.}
 \usage{
 align_pft(
   con,
@@ -32,6 +32,10 @@ In the second case, must be passable to match_species_id.}
 
 \item{subset_is_ok}{When aligning two species lists, this allows for alignement when species lists aren't identical. 
 set to FALSE by default.}
+
+\item{comparison_type}{one of "data_to_model", "data_to_data", or "model_to_model"}
+
+\item{...}{other arguments, currently ignored}
 }
 \value{
 \code{list} containing the following columns:
@@ -43,10 +47,9 @@ set to FALSE by default.}
 }
 }
 \description{
-align_pft
+Align vectors of Plant Functional Type and species.
 }
 \details{
-Aligns vectors of Plant Fucntional Typed and species.
 Can align: 
 - two vectors of plant fucntional types (pft's) if a custom map is provided
 - a list of species (usda, fia, or latin_name format) to a plant fucntional type
@@ -66,22 +69,26 @@ Can align:
 \examples{
 \dontrun{
 
+con <- db.open(list(host = "postgres", user = "bety", password = "carya"))
 
 #------------ A species to PFT alignment -----------
-observation_one<-c("AMCA3","AMCA3","AMCA3","AMCA3")
-observation_two<-c("a", "b", "a", "a") #
+observation_one <- c("AMCA3","AMCA3","AMCA3","AMCA3")
+observation_two <- c("a", "b", "a", "a")
 
-format_one<-"species_USDA_symbol"
-format_two<-"plant_funtional_type"
+format_one <- "species_USDA_symbol"
+format_two <- "plant_functional_type"
 
-table<-list()
-table$plant_functional_type_one<- c("AMCA3","AMCA3","ARHY", "ARHY")
-table$plant_functional_type_two<- c('a','a','b', 'b') # PFT groupings
-table<-as.data.frame(table)
+table <- list()
+table$plant_functional_type_one <- c("AMCA3","AMCA3","ARHY", "ARHY")
+table$plant_functional_type_two <- c('a','a','b', 'b') # PFT groupings
+table <- as.data.frame(table)
 
 
-aligned<-align_pft(con = con, observation_one = observation_one, observation_two = observation_two, 
-format_one = format_one, format_two = format_two, custom_table = table)
+aligned <- align_pft(
+  con = con,
+  observation_one = observation_one, observation_two = observation_two,
+  custom_table = table,
+  format_one = format_one, format_two = format_two)
 }
 
 }

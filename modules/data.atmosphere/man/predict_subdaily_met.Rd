@@ -47,7 +47,7 @@ ensemble rather than overwriting with a default naming scheme}
 
 \item{resids}{- logical stating whether to pass on residual data or not}
 
-\item{adjust.pr}{- adjustment factor fore preciptiation when the extracted values seem off}
+\item{adjust.pr}{- adjustment factor fore precipitation when the extracted values seem off}
 
 \item{force.sanity}{- (logical) do we force the data to meet sanity checks?}
 
@@ -60,6 +60,8 @@ ensemble rather than overwriting with a default naming scheme}
 \item{seed}{- manually set seed for results to be reproducible}
 
 \item{print.progress}{- print the progress bar?}
+
+\item{...}{further arguments, currently ignored}
 }
 \description{
 This is the main function of the tdm family workflow. This function predicts subdaily meteorology
@@ -77,16 +79,15 @@ Predict Subdaily Meteorology based off of statistics created in gen.subdaily.mod
 }
 \examples{
 \dontrun{
-library(PEcAn.data.atmosphere)
-outfolder = '~/Downscaled_GCM'
-in.path = '~/raw_GCM'
-in.prefix = 'GFDL'
-lm.models.base = 'sf_scratch/US-WCr'
-dat.train_file = 'Training_data/US-WCr_dat.train.nc'
-start_date = '2010-01-01'
-end_date = '2014-12-31'
-cores.max = 12
-n.ens = 3}
+  predict_subdaily_met(
+    outfolder = "~/Downscaled_GCM",
+    in.path = "~/raw_GCM",
+    in.prefix = "GFDL",
+    path.train = "~/Training_data",
+    lm.models.base = "sf_scratch/US-WCr",
+    ens.labs = 1:3
+  )
+}
 }
 \seealso{
 Other tdm - Temporally Downscale Meteorology: 

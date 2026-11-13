@@ -4,16 +4,40 @@
 \alias{runModule.run.write.configs}
 \title{Generate model-specific run configuration files for one or more PEcAn runs}
 \usage{
-runModule.run.write.configs(settings, overwrite = TRUE)
+runModule.run.write.configs(settings, overwrite = TRUE, input_design = NULL)
 }
 \arguments{
 \item{settings}{a PEcAn Settings or MultiSettings object}
 
 \item{overwrite}{logical: Replace config files if they already exist?}
+
+\item{input_design}{Optional. The parameter/input design for the runs,
+normally the full result of \code{generate_joint_ensemble_design()}: a list
+with \code{design_matrix} (a data.frame whose \code{param} column selects rows of
+\code{trait.samples}/\code{ensemble.samples}, plus optional columns named
+for \code{settings$run$inputs} tags such as \code{met} or \code{soil}) and
+\code{samples} (the parameter bundle those indices point into). Can be:
+\itemize{
+  \item The \code{list(design_matrix, samples)} returned by
+        \code{generate_joint_ensemble_design()}
+  \item \code{NULL} to generate the design and samples internally from
+        \code{settings}
+}
+A bare design data.frame is not accepted: its \code{param} indices are only
+meaningful together with the samples they index into, so the design and its
+samples must travel together.}
 }
 \value{
 A modified settings object, invisibly
 }
 \description{
-Generate model-specific run configuration files for one or more PEcAn runs
+This function serves as the orchestration layer between PEcAn workflows and
+the config-writing machinery. It generates appropriate input designs
+(ensemble and/or SA) if not provided. For MultiSettings, it generates designs once
+from the first site then shares across all sites for consistent sampling. Finally,
+it delegates to \code{\link{run.write.configs}} for actual config generation.
+The input design determines how parameter samples and input files (met, soil,
+etc.) are coordinated across runs. Ensemble designs typically use random or
+quasi-random sampling, while SA designs hold non-parameter inputs constant
+(OAT methodology).
 }

@@ -4,20 +4,17 @@
 \alias{loadPath.sitePFT}
 \title{Title loadPath.sitePFT}
 \usage{
-loadPath.sitePFT(settings, Path)
+loadPath.sitePFT(Path)
 }
 \arguments{
-\item{settings}{pecan setting list.}
-
-\item{Path}{Character of file name with extension.
-The path will be generated using the outdir tag in pecan settings.}
+\item{Path}{Character of file name with extension.}
 }
 \value{
 a dataframe of two columns of site and pft
 }
 \description{
 The csv or the text file needs to have a header and be
-  separated using comma. Under the first column in the text file,
-  one needs to specify the site id and in the second column there has to be
-  the name of the PFT.
+separated using comma. Under the first column in the text file,
+one needs to specify the site id and in the second column there has to be
+the name of the PFT.
 }

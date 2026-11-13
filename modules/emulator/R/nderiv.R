@@ -1,8 +1,9 @@
-##' @name nderiv
-##' @title nderiv
+##' nderiv
 ##' @export
 ##' 
-##' @return der
+##' @param x Name of variable to plot on X axis
+##' @param y Name of variable to plot on Y axis
+##' @return numeric vector of numerical derivatives of \code{y} with respect to \code{x}
 ##'
 ##' @author Michael Dietze
 nderiv <- function(x, y) {

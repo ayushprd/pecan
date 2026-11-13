@@ -1,8 +1,7 @@
 Package: PEcAn.BIOCRO
 Type: Package
-Title: PEcAn package for integration of the BioCro model
-Version: 1.7.2
-Date: 2021-10-04
+Title: PEcAn Package for Integration of the BioCro Model
+Version: 1.7.5.9000
 Authors@R: c(person("David", "LeBauer", role = c("aut", "cre"),
                      email = "dlebauer@email.arizona.edu"),
              person("Chris", "Black", role = c("aut"),
@@ -13,6 +12,8 @@ Authors@R: c(person("David", "LeBauer", role = c("aut", "cre"),
 Author: David LeBauer, Deepak Jaiswal, Christopher Black
 Maintainer: David LeBauer <dlebauer@illinois.edu>
 Description: This module provides functions to link BioCro to PEcAn.
+URL: https://pecanproject.github.io
+BugReports: https://github.com/PecanProject/pecan/issues
 Imports:
     PEcAn.logger,
     PEcAn.remote,
@@ -20,7 +21,6 @@ Imports:
     PEcAn.settings,
     PEcAn.data.atmosphere,
     PEcAn.data.land,
-    udunits2 (>= 0.11),
     ncdf4 (>= 1.15),
     lubridate (>= 1.7.0),
     data.table,
@@ -29,15 +29,18 @@ Imports:
     rlang
 Suggests:
     BioCro,
+    knitr (>= 1.50),
     testthat (>= 2.0.0),
     mockery (>= 0.3.0),
+    purrr,
     PEcAn.DB,
+    rmarkdown,
     RPostgreSQL
 Remotes:
-    github::ebimodeling/biocro
+    github::ebimodeling/biocro@0.951
 License: BSD_3_clause + file LICENSE
 Copyright: Energy Biosciences Institute, Authors
-LazyLoad: yes
-LazyData: FALSE
 Encoding: UTF-8
-RoxygenNote: 7.1.2
+VignetteBuilder: knitr, rmarkdown
+RoxygenNote: 7.3.3
+X-schema-keywords: BIOCRO, ecosystem-modeling

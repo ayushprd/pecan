@@ -6,9 +6,13 @@
 ##' @param var.names vector names of state variable names.
 ##' @param X a matrix of state variables. In this matrix rows represent ensembles, while columns show the variables for different sites.
 ##' @param localization.FUN This is the function that performs the localization of the Pf matrix and it returns a localized matrix with the same dimensions.
+##' @param t not used
+##' @param blocked.dis passed to `localization.FUN`
+##' @param ... passed to `localization.FUN`
 ##' @description The argument X needs to have an attribute pointing the state variables to their corresponding site. This attribute needs to be called `Site`.
 ##' At the moment, the cov between state variables at blocks defining the cov between two sites are assumed zero.
 ##' @return It returns the var-cov matrix of state variables at multiple sites.
+##' @importFrom rlang .data
 ##' @export 
 
 
@@ -23,21 +27,21 @@ Contruct.Pf <- function(site.ids, var.names, X, localization.FUN=NULL, t=1, bloc
   for (site in site.ids){
     #let's find out where this cov (for the current site needs to go in the main cov matrix)
     pos.in.matrix <- which(attr(X,"Site") %in% site)
-   #foreach site let's get the Xs
-    pf.matrix [pos.in.matrix, pos.in.matrix] <- cov( X [, pos.in.matrix] ,use="complete.obs")
+    #foreach site let's get the Xs
+    pf.matrix [pos.in.matrix, pos.in.matrix] <- stats::cov( X [, pos.in.matrix] ,use="complete.obs")
   }
   
   # This is where we estimate the cov between state variables of different sites
   #I put this into a sperate loop so we can have more control over it
   site.cov.orders <- expand.grid(site.ids,site.ids) %>%
-                        filter( Var1 != Var2)
-
-  for (i in 1:nrow(site.cov.orders)){
+    dplyr::filter( .data$Var1 != .data$Var2)
+  
+  for (i in seq_len(nrow(site.cov.orders))){
     # first we need to find out where to put it in the big matrix
     rows.in.matrix <- which(attr(X,"Site") %in% site.cov.orders[i,1])
     cols.in.matrix <- which(attr(X,"Site") %in% site.cov.orders[i,2])
     #estimated between these two sites
-    two.site.cov <- cov( X [, c(rows.in.matrix, cols.in.matrix)],use="complete.obs" )[(nvariable+1):(2*nvariable),1:nvariable]
+    two.site.cov <- stats::cov( X [, c(rows.in.matrix, cols.in.matrix)],use="complete.obs" )[(nvariable+1):(2*nvariable),1:nvariable]
     # I'm setting the off diag to zero 
     two.site.cov [which(lower.tri(two.site.cov, diag = FALSE),TRUE) %>% rbind (which(upper.tri(two.site.cov,FALSE),TRUE))] <- 0
     #putting it back to the main matrix
@@ -45,7 +49,7 @@ Contruct.Pf <- function(site.ids, var.names, X, localization.FUN=NULL, t=1, bloc
   }
   
   # if I see that there is a localization function passed to this - I run it by the function.
-  if (!is.null(localization.FUN)) {
+  if (!is.null(localization.FUN) && nsite > 1) {
     pf.matrix.out <- localization.FUN (pf.matrix, blocked.dis, ...)
   } else{
     pf.matrix.out <- pf.matrix
@@ -53,13 +57,13 @@ Contruct.Pf <- function(site.ids, var.names, X, localization.FUN=NULL, t=1, bloc
   
   # adding labels to rownames and colnames
   labelss <- paste0(rep(var.names, length(site.ids)) %>% as.character(),"(",
-         rep(site.ids, each=length(var.names)),")") 
+                    rep(site.ids, each=length(var.names)),")") 
   
   colnames(pf.matrix.out ) <-labelss
   rownames(pf.matrix.out ) <-labelss
   
   return(pf.matrix.out)
-
+  
 }
 
 ##' @title Construct.R
@@ -78,14 +82,14 @@ Contruct.Pf <- function(site.ids, var.names, X, localization.FUN=NULL, t=1, bloc
 ##' @export
 
 Construct.R<-function(site.ids, var.names, obs.t.mean, obs.t.cov){
-
+  
   # keeps Hs of sites
   site.specific.Rs <-list()
   #
   nsite <- length(site.ids)
   #
   nvariable <- length(var.names)
-  Y<-c()
+  Y<-obs.names<-c()
   
   for (site in site.ids){
     choose <- sapply(var.names, agrep, x=names(obs.t.mean[[site]]), max=1, USE.NAMES = FALSE) %>% unlist
@@ -93,6 +97,7 @@ Construct.R<-function(site.ids, var.names, obs.t.mean, obs.t.cov){
     if(length(choose) == 0){
       next;
     }else{
+      obs.names <- c(obs.names, names(obs.t.mean[[site]])[choose])
       Y <- c(Y, unlist(obs.t.mean[[site]][choose]))
       #collecting them
       if (ncol(obs.t.mean[[site]]) > 1)
@@ -102,10 +107,10 @@ Construct.R<-function(site.ids, var.names, obs.t.mean, obs.t.cov){
         site.specific.Rs <- c(site.specific.Rs, list(as.matrix(obs.t.cov[[site]][choose])))
       }
     }
-  #make block matrix out of our collection
-  R <- Matrix::bdiag(site.specific.Rs) %>% as.matrix()
-    }
-
+    #make block matrix out of our collection
+    R <- Matrix::bdiag(site.specific.Rs) %>% as.matrix()
+  }
+  names(Y) <- obs.names
   return(list(Y=Y, R=R))
 }
 
@@ -117,7 +122,7 @@ Construct.R<-function(site.ids, var.names, obs.t.mean, obs.t.cov){
 ##' @param x Vector of numbers to identify each block.
 ##' @param b Numeric value for the size of the blocks within the matrix ordered depending on byrow
 ##' @param byrow logical value. If FALSE (the default) the blocks are filled by columns, otherwise the blocks in the matrix are filled by rows.
-##' @param dimnames Character string of name attribute for the basis of the blcok matrix. If NULL a vector of the same length of b provides the basis of row and column names.#'.
+##' @param dimnames Character string of name attribute for the basis of the block matrix. If NULL a vector of the same length of b provides the basis of row and column names.#'.
 ##’  
 ##' 
 ##' @description This function is adopted from migest package.
@@ -165,51 +170,156 @@ block_matrix <- function (x = NULL, b = NULL, byrow = FALSE, dimnames = NULL) {
 ##' @param site.ids a vector name of site ids  
 ##' @param var.names vector names of state variable names
 ##' @param obs.t.mean list of vector of means for the time t for different sites. 
+##' @param products vector names of products for each observation.
 ##' 
 ##' @description This function is makes the blocked mapping function.
 ##' 
 ##' @return Returns a matrix with block sizes determined by the b argument. Each block is filled with the same value taken from x.
 ##' @export
-Construct.H.multisite <- function(site.ids, var.names, obs.t.mean){
-
-  site.ids.with.data <- names(obs.t.mean)
-  site.specific.Hs <- list()
-  
-  
-  nsite <- length(site.ids) # number of sites
-  nsite.ids.with.data <-length(site.ids.with.data) # number of sites with data
-  nvariable <- length(var.names)
-  #This is used inside the loop below for moving between the sites when populating the big H matrix
-  nobs <- obs.t.mean %>% map_dbl(~length(.x)) %>% max # this gives me the max number of obs at sites
-  nobstotal<-obs.t.mean %>% purrr::flatten() %>% length() # this gives me the total number of obs
-  
-  #Having the total number of obs as the row number
-  H <- matrix(0,  nobstotal, (nvariable*nsite))
-  j<-1
-  
-  for(i in seq_along(site.ids))
-    {
-    site <- site.ids[i]
-    choose <- sapply(names(obs.t.mean[[site]]), agrep, x = var.names,
-                     max = 1, USE.NAMES = FALSE) %>% unlist  
-    
-    if(is.null(choose)) next;
-    
-    H.this.site <- matrix(0, length(choose), nvariable)
-    
-    for (n in seq_along(choose))
-    {
-      H.this.site[n, choose[n]] <- 1
-      #sapply(choose[n], agrep, x = seq_along(var.names), max = 1, USE.NAMES = FALSE) %>% unlist
-      #H.this.site[n, choose.col] = 1
-    }
-    
-    pos.row <- ((nobs*j)-(nobs-1)):(nobs*j)
-    pos.col <- ((nvariable*i)-(nvariable-1)):(nvariable*i)
-    
-    H[pos.row,pos.col] <- H.this.site
-    j <- j+1
+Construct.H.multisite <- function(site.ids, var.names, obs.t.mean, products = NULL){
+  #we first create a matrix containing site.ids, var.names, observations, and the index of observations across obs.mean.
+  if (is.null(products)) {
+    site.ids.matrix <- rep(site.ids, each = length(var.names))#this is replicated site.ids. The number of replication depends on how many vars in total.
+  } else {
+    site.ids.matrix <- rep(site.ids, each = length(products))#this is replicated site.ids. The number of replication depends on how many products in total.
   }
-    
-  return(H)
+  var.names.matrix <- rep(var.names, length(site.ids))#this is the products names from settings.
+  if (!is.null(products)) {
+    products.matrix <- rep(products, length(site.ids))#this is the products names from settings.
+    H.pre.matrix <- data.frame(site.ids.matrix, var.names.matrix, products.matrix, NA, NA) %>% 
+      `colnames<-` (c("site.id", "var.name", "product", "obs", "obs.ind"))
+  } else {
+    H.pre.matrix <- data.frame(site.ids.matrix, var.names.matrix, NA, NA) %>% 
+      `colnames<-` (c("site.id", "var.name", "obs", "obs.ind"))
+  }
+  obs.ind <- 1
+  #loop over site.ids * var.names
+  for (i in seq_along(site.ids.matrix)) {
+    site.id <- H.pre.matrix[i,]$site.id
+    var.name <- H.pre.matrix[i,]$var.name
+    site.ind <- which(names(obs.t.mean)==site.id)
+    product <- H.pre.matrix[i,]$product
+    if(length(site.ind) > 0){
+      obs <- obs.t.mean[[site.ind]]
+      if (is.null(products)) {
+        var.ind <- which(names(obs)==var.name)
+      } else {
+        obs.attr <- obs %>% purrr::map(function(o)attributes(o)) %>% unlist %>% purrr::set_names(NULL)
+        var.ind <- which(obs.attr==product & names(obs)==var.name)
+      }
+      if(length(var.ind) > 0){
+        #write observation and the index into the matrix.
+        H.pre.matrix[i,]$obs <- obs[[var.ind]]
+        H.pre.matrix[i,]$obs.ind <- obs.ind
+        obs.ind <- obs.ind + 1
+      }
+    }
+  }
+  #convert the matrix into H matrix.
+  uniq.var.names <- unique(var.names)
+  uniq.var.names.matrix <- rep(uniq.var.names, length(site.ids))
+  uniq.site.ids.matrix <- rep(site.ids, each = length(uniq.var.names))
+  H <- matrix(0, length(uniq.var.names.matrix), dim(H.pre.matrix)[1])
+  for (i in seq_len(nrow(H.pre.matrix))) {
+    if (!is.na(H.pre.matrix$obs[i])) {
+      col.ind <- which(site.ids.matrix == H.pre.matrix$site.id[i] & products.matrix == H.pre.matrix$product[i])
+      row.ind <- which(uniq.site.ids.matrix == H.pre.matrix$site.id[i] & uniq.var.names.matrix == H.pre.matrix$var.name[i])
+      H[row.ind, col.ind] <- 1
+    }
+  }
+  H
+}
+
+##' @title construct_nimble_H
+##' @name  construct_nimble_H
+##' @author Dongchen Zhang
+##' 
+##' @param site.ids a vector name of site ids  
+##' @param var.names vector names of state variable names
+##' @param obs.t list of vector of means for the time t for different sites.
+##' @param pft.path physical path to the pft.csv file.
+##' @param by criteria, it supports by variable, site, pft, all, and single Q.
+##' @param products vector names of products for each observation.
+##' 
+##' @description This function is an upgrade to the Construct.H.multisite function which provides the index by different criteria.
+##' 
+##' @return Returns one vector containing index for which Q to be estimated for which variable, 
+##' and the other vector gives which state variable has which observation (= element.W.Data).
+##' @export
+construct_nimble_H <- function(site.ids, var.names, obs.t, pft.path = NULL, by = "single", products = NULL){
+  if(by == "pft" | by == "block_pft_var" & is.null(pft.path)){
+    PEcAn.logger::logger.info("please provide pft path.")
+    return(0)
+  }
+  H <- Construct.H.multisite(site.ids, var.names, obs.t, products)
+  if (by == "var") {
+    total_var_name <- rep(var.names, length(site.ids))
+    Ind <- rep(0, dim(H)[2])
+    for (i in seq_along(var.names)) {
+      Ind[which(total_var_name == var.names[i])] <- i
+    }
+  } else if (by == "site") {
+    total_site_id <- rep(site.ids, each = length(var.names))
+    Ind <- rep(0, dim(H)[2])
+    for (i in seq_along(site.ids)) {
+      Ind[which(total_site_id == site.ids[i])] <- i
+    }
+  } else if (by == "pft") {
+    pft <- utils::read.csv(pft.path)
+    rownames(pft) <- pft$site
+    total_site_id <- rep(site.ids, each = length(var.names))
+    total_pft <- pft[total_site_id, 2]
+    Ind <- rep(0, dim(H)[2])
+    pft.names <- sort(unique(pft$pft))
+    for (i in seq_along(pft.names)) {
+      Ind[which(total_pft == pft.names[i])] <- i
+    }
+  } else if (by == "block_pft_var") {
+    #by pft
+    pft <- utils::read.csv(pft.path)
+    rownames(pft) <- pft$site
+    total_site_id <- rep(site.ids, each = length(var.names))
+    total_pft <- pft[total_site_id, 2]
+    Ind_pft <- rep(0, dim(H)[2])
+    pft.names <- sort(unique(pft$pft))
+    for (i in seq_along(pft.names)) {
+      Ind_pft[which(total_pft == pft.names[i])] <- i
+    }
+    #by var
+    total_var_name <- rep(var.names, length(site.ids))
+    Ind_var <- rep(0, dim(H)[2])
+    for (i in seq_along(var.names)) {
+      Ind_var[which(total_var_name == var.names[i])] <- i
+    }
+    #by site
+    total_site_id <- rep(site.ids, each = length(var.names))
+    Ind_site <- rep(0, dim(H)[2])
+    for (i in seq_along(site.ids)) {
+      Ind_site[which(total_site_id == site.ids[i])] <- i
+    }
+    # #create reference to which block and which var
+    # #Ind for which site should use which block
+    # block.index <- var.index <- Ind_site
+    # for (i in seq_along(Ind_site)) {
+    #   Ind_block[i] <- Ind_pft[i]
+    # }
+  } else if (by == "all") {
+    Ind <- 1:dim(H)[2]
+  } else if (by == "single") {
+    Ind <- rep(1, dim(H)[2])
+  } else {
+    PEcAn.logger::logger.info("Couldn't find the proper by argument!")
+    return(0)
+  }
+  if (by == "block_pft_var") {
+    return(list(Ind_pft = Ind_pft[which(apply(H, 2, sum) == 1)],
+                Ind_site = Ind_site[which(apply(H, 2, sum) == 1)],
+                Ind_var = Ind_var[which(apply(H, 2, sum) == 1)],
+                H.ind = which(apply(H, 2, sum) == 1)))
+  } else {
+    return(list(Q.ind = Ind[which(apply(H, 2, sum) == 1)], 
+                H.ind = which(apply(H, 2, sum) == 1),
+                H.matrix = H))
+  }
+  
 }

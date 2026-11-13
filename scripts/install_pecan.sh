@@ -410,7 +410,7 @@ sudo cp sipnet /usr/local/bin/sipnet.r136
 make clean
 
 cd ${HOME}/sipnet/
-git checkout master
+git checkout main
 make clean
 make
 sudo cp sipnet /usr/local/bin/sipnet.git
@@ -433,7 +433,7 @@ make clean
 echo "######################################################################"
 echo "BioCro"
 echo "######################################################################"
-echo 'devtools::install_github("ebimodeling/biocro")' | R --vanilla
+echo 'devtools::install_github("ebimodeling/biocro@0.951")' | R --vanilla
 
 echo "######################################################################"
 echo "Linkages"

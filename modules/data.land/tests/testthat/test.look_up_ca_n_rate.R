@@ -1,0 +1,179 @@
+# look_up_ca_n_rate tests
+
+test_that("exact match returns correct N rates in g/m2 (default)", {
+  result <- look_up_ca_n_rate("Corn")
+  expect_equal(nrow(result), 1)
+  expect_equal(result$crop, "Corn")
+  expect_equal(result$pft_group, "row")
+  expect_equal(result$min_n, 16.813)
+  expect_equal(result$max_n, 30.823)
+  expect_true("source" %in% names(result))
+})
+
+test_that("exact match is case-insensitive", {
+  result <- look_up_ca_n_rate("corn")
+  expect_equal(nrow(result), 1)
+  expect_equal(result$crop, "Corn")
+})
+
+test_that("unit = lbs_acre returns imperial units", {
+  result <- look_up_ca_n_rate("Corn", unit = "lbs_acre")
+  expect_equal(result$min_n, 150)
+  expect_equal(result$max_n, 275)
+})
+
+test_that("pft_group filter works", {
+  result <- look_up_ca_n_rate("Pistachios", pft_group = "woody")
+  expect_equal(nrow(result), 1)
+  expect_equal(result$crop, "Pistachios")
+
+  # wrong pft_group returns empty result
+  level <- PEcAn.logger::logger.getLevel()
+  PEcAn.logger::logger.setLevel("OFF")
+  result2 <- look_up_ca_n_rate("Pistachios", pft_group = "row")
+  PEcAn.logger::logger.setLevel(level)
+  expect_equal(nrow(result2), 0)
+})
+
+test_that("partial match suggests crops and returns empty result", {
+  level <- PEcAn.logger::logger.getLevel()
+  PEcAn.logger::logger.setLevel("OFF")
+  result <- look_up_ca_n_rate("Tomato")
+  PEcAn.logger::logger.setLevel(level)
+  expect_equal(nrow(result), 0)
+  expect_true("source" %in% names(result))
+})
+
+test_that("no match returns empty data frame with correct columns", {
+  level <- PEcAn.logger::logger.getLevel()
+  PEcAn.logger::logger.setLevel("OFF")
+  result <- look_up_ca_n_rate("Soybean")
+  PEcAn.logger::logger.setLevel(level)
+  expect_equal(nrow(result), 0)
+  expect_equal(names(result), c("pft_group", "crop", "min_n", "max_n", "source"))
+  expect_s3_class(result, "tbl_df")
+})
+
+test_that("source column contains citations, not urls", {
+  result <- look_up_ca_n_rate("Wheat")
+  expect_false(grepl("^http", result$source))
+  expect_true(grepl("Rosenstock", result$source))
+})
+
+test_that("broccoli has multi-source citation", {
+  result <- look_up_ca_n_rate("Broccoli")
+  expect_true(grepl("Rosenstock", result$source))
+  expect_true(grepl("CDFA-FREP", result$source))
+})
+
+# look_up_ca_organic_amendment tests
+
+test_that("exact compost match returns correct properties", {
+  result <- look_up_ca_organic_amendment("Poultry litter")
+  expect_equal(nrow(result), 1)
+  expect_equal(result$material, "Poultry litter")
+  expect_equal(result$n_class, "LOWER")
+  expect_true("source" %in% names(result))
+})
+
+test_that("duplicate materials return multiple rows", {
+  result <- look_up_ca_organic_amendment("Cow manure")
+  expect_equal(nrow(result), 2)
+  expect_true(all(result$material == "Cow manure"))
+  expect_equal(sort(result$source),
+               sort(c("Rynk, NC State Extension", "Eghball, UNL Extension")))
+})
+
+test_that("aggregate = mean collapses duplicate materials", {
+  result <- look_up_ca_organic_amendment("Cow manure", aggregate = "mean")
+  expect_equal(nrow(result), 1)
+  expect_equal(result$material, "Cow manure")
+  # cn_avg should be mean of 22.5 and 20.0
+  expect_equal(result$cn_avg, 21.25)
+  # source should contain both
+  expect_true(grepl("Rynk", result$source))
+  expect_true(grepl("Eghball", result$source))
+})
+
+test_that("n_class filter works", {
+  result <- look_up_ca_organic_amendment("Blood meal", n_class = "HIGHER")
+  expect_equal(nrow(result), 1)
+  expect_equal(result$n_class, "HIGHER")
+})
+
+test_that("no compost match returns empty tibble with correct columns", {
+  level <- PEcAn.logger::logger.getLevel()
+  PEcAn.logger::logger.setLevel("OFF")
+  result <- look_up_ca_organic_amendment("Unicorn dust")
+  PEcAn.logger::logger.setLevel(level)
+  expect_equal(nrow(result), 0)
+  expect_true("source" %in% names(result))
+  expect_s3_class(result, "tbl_df")
+})
+
+test_that("compost partial match suggests materials", {
+  level <- PEcAn.logger::logger.getLevel()
+  PEcAn.logger::logger.setLevel("OFF")
+  result <- look_up_ca_organic_amendment("manure")
+  PEcAn.logger::logger.setLevel(level)
+  expect_equal(nrow(result), 0)
+})
+
+# dataset structure tests
+
+test_that("ca_n_application_rate dataset has expected structure", {
+  dat <- PEcAn.data.land::ca_n_application_rate
+  expect_equal(nrow(dat), 40)
+  expect_true(all(c("pft_group", "crop", "min_n_lbs_acre", "max_n_lbs_acre",
+                     "source", "min_n_g_m2", "max_n_g_m2") %in% names(dat)))
+})
+
+test_that("ca_organic_amendment_properties dataset has expected structure", {
+  dat <- PEcAn.data.land::ca_organic_amendment_properties
+  expect_equal(nrow(dat), 32)
+  expect_true("source" %in% names(dat))
+  expect_true(all(dat$n_class %in% c("LOWER", "HIGHER")))
+})
+
+test_that("ca_organic_amendment_app_rate dataset has expected structure", {
+  dat <- PEcAn.data.land::ca_organic_amendment_app_rate
+  expect_equal(nrow(dat), 64)
+  expect_true(all(c("material", "crop_structure", "app_rate_min",
+                    "app_rate_max", "source") %in% names(dat)))
+  expect_true(all(dat$crop_structure %in% c("rows", "trees")))
+})
+
+# dataset invariants: ranges, unit round trip, and cross table integrity
+
+test_that("ca_n_application_rate ranges are ordered and units round-trip", {
+  dat <- PEcAn.data.land::ca_n_application_rate
+  expect_true(all(dat$min_n_lbs_acre >= 0))
+  expect_true(all(dat$min_n_lbs_acre <= dat$max_n_lbs_acre))
+  expect_equal(dat$min_n_g_m2,
+               round(PEcAn.utils::ud_convert(dat$min_n_lbs_acre, "lb/acre", "g/m^2"), 3))
+  expect_equal(dat$max_n_g_m2,
+               round(PEcAn.utils::ud_convert(dat$max_n_lbs_acre, "lb/acre", "g/m^2"), 3))
+  # one range per crop, and every source is a citation not a url
+  expect_equal(dplyr::n_distinct(dat$crop), nrow(dat))
+  expect_false(any(is.na(dat$source)))
+  expect_false(any(grepl("^http", dat$source)))
+})
+
+test_that("ca_organic_amendment_properties has a class for every material", {
+  dat <- PEcAn.data.land::ca_organic_amendment_properties
+  expect_false(any(is.na(dat$material_class)))
+  expect_true(all(dat$cn_min <= dat$cn_max))
+})
+
+test_that("ca_organic_amendment_app_rate matches properties and round-trips", {
+  app <- PEcAn.data.land::ca_organic_amendment_app_rate
+  props <- PEcAn.data.land::ca_organic_amendment_properties
+  # one rows record and one trees record per property row
+  expect_equal(nrow(app), 2 * nrow(props))
+  # every application rate material exists in the properties table
+  expect_true(all(app$material %in% props$material))
+  expect_equal(app$total_n_min_g_m2,
+               round(PEcAn.utils::ud_convert(app$total_n_min_lbs_acre, "lb/acre", "g/m^2"), 3))
+  expect_equal(app$total_n_max_g_m2,
+               round(PEcAn.utils::ud_convert(app$total_n_max_lbs_acre, "lb/acre", "g/m^2"), 3))
+})

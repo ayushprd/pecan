@@ -4,7 +4,14 @@
 \alias{write.insfile.LPJGUESS}
 \title{Write LPJ-GUESS instruction script}
 \usage{
-write.insfile.LPJGUESS(settings, trait.values, rundir, outdir, run.id)
+write.insfile.LPJGUESS(
+  settings,
+  trait.values,
+  rundir,
+  outdir,
+  run.id,
+  restart = NULL
+)
 }
 \arguments{
 \item{settings}{PEcAn settings list}
@@ -16,6 +23,8 @@ write.insfile.LPJGUESS(settings, trait.values, rundir, outdir, run.id)
 \item{outdir}{outdir}
 
 \item{run.id}{PEcAn run ID}
+
+\item{restart}{A list object passed from the SDA workflow containing run-specific restart information, or NULL for initial runs.}
 }
 \value{
 settings Updated list
@@ -24,5 +33,5 @@ settings Updated list
 Write LPJ-GUESS instruction script
 }
 \author{
-Istem Fer
+Istem Fer, Yinghao Sun
 }

@@ -1,8 +1,7 @@
 # this needs to be at the top, what version are we building
 ARG IMAGE_VERSION="latest"
-ARG FROM_IMAGE="depends"
-FROM pecan/${FROM_IMAGE}:${IMAGE_VERSION}
-MAINTAINER Rob Kooper <kooper@illinois.edu>
+ARG PARENT_IMAGE="pecan/depends"
+FROM ${PARENT_IMAGE}:${IMAGE_VERSION}
 
 # ----------------------------------------------------------------------
 # PEcAn version information
@@ -23,14 +22,22 @@ COPY base     /pecan/base/
 COPY modules  /pecan/modules/
 COPY models   /pecan/models/
 
-RUN cd /pecan && make && rm -rf /tmp/downloaded_packages
+# install all PEcAn packages
+# `make clean` is to remove artifacts copied in from host system
+#   (e.g. basgra.so)
+RUN --mount=type=secret,id=GITHUB_PAT \
+    export GITHUB_PAT=$(cat /run/secrets/GITHUB_PAT 2>/dev/null || true) \
+    && cd /pecan \
+    && make clean \
+    && make \
+    && rm -rf /tmp/downloaded_packages
 
 # COPY WORKFLOW
 WORKDIR /work
 COPY web/workflow.R docker/base/rstudio.sh /work/
 
 # COMMAND TO RUN
-CMD Rscript --vanilla workflow.R | tee workflow.Rout
+CMD ["bash", "-c", "Rscript --vanilla workflow.R | tee workflow.Rout"]
 
 # variables to store in docker image
 ENV PECAN_VERSION=${PECAN_VERSION} \

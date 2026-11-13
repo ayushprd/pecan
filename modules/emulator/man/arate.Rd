@@ -2,9 +2,12 @@
 % Please edit documentation in R/arate.R
 \name{arate}
 \alias{arate}
-\title{arate}
+\title{Acceptance rate}
 \usage{
 arate(x)
+}
+\arguments{
+\item{x}{vector of MCMC samples}
 }
 \description{
 Acceptance rate

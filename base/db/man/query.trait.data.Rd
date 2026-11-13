@@ -18,7 +18,13 @@ query.trait.data(
 
 \item{spstr}{is the species.id integer or string of integers associated with the species}
 
+\item{con}{database connection object}
+
+\item{update.check.only}{if TRUE, returns results but does not print summaries}
+
 \item{ids_are_cultivars}{if TRUE, the IDs in spstr are cultivar IDs, otherwise they are species IDs. Passed on to \code{\link{query.data}}}
+
+\item{...}{unused currently}
 }
 \value{
 dataframe ready for use in meta-analysis
@@ -32,8 +38,8 @@ converted from measurement temperature to \eqn{25^oC} via the arrhenius equation
 }
 \examples{
 \dontrun{
-settings <- read.settings()
-query.trait.data("Vcmax", "938", con = con)
+  con <- db.open(list(host = "postgres", user = "bety", password = "carya"))
+  query.trait.data("Vcmax", "938", con = con)
 }
 }
 \author{

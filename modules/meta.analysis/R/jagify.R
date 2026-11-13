@@ -1,12 +1,3 @@
-#-------------------------------------------------------------------------------
-# Copyright (c) 2012 University of Illinois, NCSA.
-# All rights reserved. This program and the accompanying materials
-# are made available under the terms of the 
-# University of Illinois/NCSA Open Source License
-# which accompanies this distribution, and is available at
-# http://opensource.ncsa.illinois.edu/license.html
-#-------------------------------------------------------------------------------
-
 ##'
 ##' Convert queried data to format required by JAGS meta-analysis model 
 ##'
@@ -19,32 +10,30 @@
 ##' @author David LeBauer
 jagify <- function(result, use_ghs = TRUE) {
   
-
+  
   ## Create new column "trt_id" from column 'name'.  Remove NAs. Assign treatments.
   ## Finally, summarize the results by calculating summary statistics from experimental replicates
   r <- result[!is.na(result$mean), ]
   r$trt_id <- r$name
-  r <- transform.nas(r)
+  r <- transform_nas(r)
   
   # exclude greenhouse data unless requested otherwise
   if(!use_ghs){
     r <- r[r$greenhouse != 1, ]
   }
   
-  r <- PEcAn.DB::assign.treatments(r)
+  r <- assign_treatments(r)
   r <- PEcAn.utils::summarize.result(r)
-  r <- subset(transform(r, 
-                        stat = as.numeric(stat), 
-                        n = as.numeric(n), 
-                        site_id = as.integer(factor(site_id, unique(site_id))), 
-                        greenhouse = as.integer(factor(greenhouse, unique(greenhouse))),
-                        mean = mean, 
-                        citation_id = citation_id,
-                        ghs = greenhouse,
-                        site = site_id,
-                        trt_name = name), 
-              select = c("stat", "n", "site_id", "trt_id", "mean", "citation_id", "greenhouse", 
-                         "ghs", "treatment_id", "site", "trt_name")) # original versions of greenhouse, treatment_id, site_id, and name
+  r$stat <- as.numeric(r$stat)
+  r$n <- as.numeric(r$n)
+  r$site_id <- as.integer(factor(r$site_id, unique(r$site_id)))
+  r$greenhouse <- as.integer(factor(r$greenhouse, unique(r$greenhouse)))
+  r$ghs <- r$greenhouse
+  r$site <- r$site_id
+  r$trt_name <- r$name
+  
+  r <- r[, c("stat", "n", "site_id", "trt_id", "mean", "citation_id", "greenhouse", 
+             "ghs", "treatment_id", "site", "trt_name")]
   
   #order by site_id and trt_id, but make sure "control" is the first trt of each site
   uniq <- setdiff(unique(r$trt_id), "control")
@@ -74,11 +63,11 @@ jagify <- function(result, use_ghs = TRUE) {
 ##' 
 ##' Transform NA values in data exported from BETYdb
 ##' 
-##' @name transform.nas
+##' @name transform_nas
 ##' @param data input data
 ##' 
 ##' @return A data frame NAs sensibly replaced 
-transform.nas <- function(data) {
+transform_nas <- function(data) {
   #set stat to NA if 0 (uncertainties can only asymptotically approach 0)
   data$stat[data$stat == 0] <- NA
   
@@ -96,4 +85,4 @@ transform.nas <- function(data) {
   data$n[data$n == 1 & !is.na(data$stat)] <- 2
   
   return(data)
-} # transform.nas
+} # transform_nas

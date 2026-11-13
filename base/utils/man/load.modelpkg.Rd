@@ -13,10 +13,12 @@ load.modelpkg(model)
 FALSE if function returns error; else TRUE
 }
 \description{
-load model package
+Load model package
 }
 \examples{
-\dontrun{require.modelpkg(BioCro)}
+\dontrun{
+  load.modelpkg(BioCro)
+}
 }
 \author{
 David LeBauer

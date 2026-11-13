@@ -7,12 +7,18 @@
 ##' @param start_date desired start date YYYY-MM-DD
 ##' @param end_date desired end date YYYY-MM-DD
 ##' @param ... other inputs
-##' example options(download.ftp.method="ncftpget")
-##' @importFrom magrittr %>%
+##'
+##' @importFrom dplyr %>%
 ##' 
 ##' @examples
 ##' \dontrun{
-##' download.NARR("~/",'2000/01/01','2000/01/02', overwrite = TRUE, verbose = TRUE)
+##' options(download.ftp.method = "ncftpget")
+##' download.NARR(
+##'    outfolder = "~/",
+##'    start_date = "2000/01/01",
+##'    end_date = "2000/01/02",
+##'    overwrite = TRUE,
+##'    verbose = TRUE)
 ##' }
 ##' 
 ##' @export
@@ -70,7 +76,7 @@ download.NARR <- function(outfolder, start_date, end_date, overwrite = FALSE, ve
       url <- paste0("ftp://ftp.cdc.noaa.gov/Datasets/NARR/monolevel/", v, ".", year, ".nc")
       
       PEcAn.logger::logger.debug(paste0("Downloading from:\n", url, "\nto:\n", new.file))
-      PEcAn.utils::download.file(url, new.file, method)
+      PEcAn.utils::download_file(url, new.file, method)
     }
   }
   

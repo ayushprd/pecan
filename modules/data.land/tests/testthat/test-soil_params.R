@@ -1,6 +1,4 @@
 
-context("soil_params")
-
 test_that("accepts 2-component textures", {
 	sand <- c(0.3, 0.4, 0.5)
 	clay <- c(0.2, 0.3, 0.3)
@@ -22,4 +20,17 @@ test_that("converts percent to proportion and normalizes to sum of fractions", {
 	expect_equal(res_halfagain, res_150pct)
 	expect_equal(res_prop, res_150pct)
 	expect_equal(res_prop$soil_type, "Silty clay loam")
+})
+
+test_that("bulk density varies by class unless specified", {
+
+
+  expect_equal(soil_params(soil_type = "Peat")$soil_bulk_density, 500)
+  expect_equal(
+    soil_params(soil_type = "Peat", bulk = 1000)$soil_bulk_density,
+    1000
+  )
+  expect_equal(soil_params(sand = 0.01, clay = 0.99)$soil_bulk_density, 1350)
+  expect_equal(soil_params(sand = 0.99, clay = 0.01)$soil_bulk_density, 1200)
+
 })

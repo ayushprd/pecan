@@ -1,8 +1,7 @@
 Package: PEcAn.dvmdostem
 Type: Package
-Title: PEcAn package for integration of the dvmdostem model
-Version: 1.7.2
-Date: 2021-10-04
+Title: PEcAn Package for Integration of the Dvmdostem Model
+Version: 1.7.5.9000
 Authors@R: c(person("Shawn", "Serbin", role = c("aut"),
                      email = "sserbin@bnl.gov"),
              person("Tobey", "Carman", role = c("aut", "cre"),
@@ -12,8 +11,12 @@ Author: Tobey Carman, Shawn Serbin
 Maintainer: Tobey Carman <tcarman2@alaska.edu>, Shawn Serbin <sserbin@bnl.gov>
 Description: This module provides functions to link the dvmdostem model to
     PEcAn.
+URL: https://pecanproject.github.io
+BugReports: https://github.com/PecanProject/pecan/issues
 Imports:
+    lubridate,
     ncdf4,
+    PEcAn.logger,
     PEcAn.utils (>= 1.4.8),
     rjson
 Suggests:
@@ -25,4 +28,5 @@ Copyright: Authors
 LazyLoad: yes
 LazyData: FALSE
 Encoding: UTF-8
-RoxygenNote: 7.1.2
+RoxygenNote: 7.3.3
+X-schema.org-keywords: dvmdostem, ecosystem-modeling

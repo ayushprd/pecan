@@ -1,13 +1,3 @@
-#-------------------------------------------------------------------------------
-# Copyright (c) 2015 Boston University, NCSA.
-# All rights reserved. This program and the accompanying materials
-# are made available under the terms of the
-# NCSA Open Source License
-# which accompanies this distribution, and is available at
-# http://opensource.ncsa.illinois.edu/license.html
-#-------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------#
 ##' Convert GDAY output to netCDF
 ##'
 ##' Converts all output contained in a folder to netCDF.
@@ -25,12 +15,9 @@
 model2netcdf.GDAY <- function(outdir, sitelat, sitelon, start_date, end_date) {
   
 
-  G_2_KG <- 0.001
-  TONNES_PER_HA_TO_G_M2 <- 100
-  THA_2_KG_M2 <- TONNES_PER_HA_TO_G_M2 * 0.001
   
   ### Read in model output in GDAY format
-  GDAY.output <- read.csv(file.path(outdir, "gday_out.csv"), header = TRUE, sep = ",", skip = 1)
+  GDAY.output <- utils::read.csv(file.path(outdir, "gday_out.csv"), header = TRUE, sep = ",", skip = 1)
   GDAY.output.dims <- dim(GDAY.output)
   
   ### Determine number of years and output timestep
@@ -54,17 +41,20 @@ model2netcdf.GDAY <- function(outdir, sitelat, sitelon, start_date, end_date) {
     output <- list()
     
     ## standard variables: C-Fluxes
-    output[[1]] <- (sub.GDAY.output[, "auto_resp"] * THA_2_KG_M2) / timestep.s
-    output[[2]] <- (sub.GDAY.output[, "hetero_resp"] * THA_2_KG_M2) / timestep.s
-    output[[3]] <- (sub.GDAY.output[, "auto_resp"] + sub.GDAY.output[, "hetero_resp"] *
-                      THA_2_KG_M2) / timestep.s
-    output[[4]] <- (sub.GDAY.output[, "gpp"] * THA_2_KG_M2) / timestep.s
-    output[[5]] <- (sub.GDAY.output[, "nep"] * -1 * THA_2_KG_M2) / timestep.s
-    output[[6]] <- (sub.GDAY.output[, "npp"] * THA_2_KG_M2) / timestep.s
+    ## NOTE: GDAY outputs daily accumulated values in Mg/ha/day
+    ## Transform all to kg/m2/sec for PEcAn output
+    output[[1]] <- PEcAn.utils::ud_convert(sub.GDAY.output[, "auto_resp"], "Mg/ha/day", "kg/m2/s")
+    output[[2]] <- PEcAn.utils::ud_convert(sub.GDAY.output[, "hetero_resp"], "Mg/ha/day", "kg/m2/s")
+    output[[3]] <- PEcAn.utils::ud_convert(sub.GDAY.output[, "auto_resp"] + sub.GDAY.output[, "hetero_resp"], "Mg/ha/day", "kg/m2/s")
+    output[[4]] <- PEcAn.utils::ud_convert(sub.GDAY.output[, "gpp"], "Mg/ha/day", "kg/m2/s")
+    output[[5]] <- PEcAn.utils::ud_convert(sub.GDAY.output[, "nep"] * -1, "Mg/ha/day", "kg/m2/s")
+    output[[6]] <- PEcAn.utils::ud_convert(sub.GDAY.output[, "npp"], "Mg/ha/day", "kg/m2/s")
     
-    ## standard variables: C-State
-    output[[7]] <- (sub.GDAY.output[, "stem"] + sub.GDAY.output[, "branch"] * THA_2_KG_M2) / timestep.s
-    output[[8]] <- (sub.GDAY.output[, "soilc"] * THA_2_KG_M2) / timestep.s
+    ## standard variables: C-State (pools)
+    # NOTE: GDAY outputs stocks in Mg/ha. 
+    # Transform to kg/m2 for PEcAn output
+    output[[7]] <- PEcAn.utils::ud_convert(sub.GDAY.output[, "stem"] + sub.GDAY.output[, "branch"], "Mg/ha", "kg/m2")
+    output[[8]] <- PEcAn.utils::ud_convert(sub.GDAY.output[, "soilc"], "Mg/ha", "kg/m2")
     output[[9]] <- (sub.GDAY.output[, "lai"])
     
     ## standard variables: water fluxes
@@ -87,43 +77,40 @@ model2netcdf.GDAY <- function(outdir, sitelat, sitelon, start_date, end_date) {
     
     dims <- list(lon = lon, lat = lat, time = t)
     
-    var <- list()
+    nc_var <- list()
     ## C-Fluxes
-    var[[1]] <- PEcAn.utils::to_ncvar("AutoResp",dims)
-    var[[2]] <- PEcAn.utils::to_ncvar("HeteroResp", dims)
-    var[[3]] <- PEcAn.utils::to_ncvar("TotalResp",dims)
-    var[[4]] <- PEcAn.utils::to_ncvar("GPP", dims)
-    var[[5]] <- PEcAn.utils::to_ncvar("NEE", dims)
-    var[[6]] <- PEcAn.utils::to_ncvar("NPP", dims)
+    nc_var[[1]] <- PEcAn.utils::to_ncvar("AutoResp",dims)
+    nc_var[[2]] <- PEcAn.utils::to_ncvar("HeteroResp", dims)
+    nc_var[[3]] <- PEcAn.utils::to_ncvar("TotalResp",dims)
+    nc_var[[4]] <- PEcAn.utils::to_ncvar("GPP", dims)
+    nc_var[[5]] <- PEcAn.utils::to_ncvar("NEE", dims)
+    nc_var[[6]] <- PEcAn.utils::to_ncvar("NPP", dims)
     
     ## C-State
-    var[[7]] <- PEcAn.utils::to_ncvar("AbvGrndWood", dims)
-    var[[8]] <- PEcAn.utils::to_ncvar("TotSoilCarb", dims)
-    var[[9]] <- PEcAn.utils::to_ncvar("LAI", dims)
+    nc_var[[7]] <- PEcAn.utils::to_ncvar("AbvGrndWood", dims)
+    nc_var[[8]] <- PEcAn.utils::to_ncvar("TotSoilCarb", dims)
+    nc_var[[9]] <- PEcAn.utils::to_ncvar("LAI", dims)
     
     ## Water fluxes
-    var[[10]] <- PEcAn.utils::to_ncvar("Evap", dims)
-    var[[11]] <- PEcAn.utils::to_ncvar("TVeg", dims)
+    nc_var[[10]] <- PEcAn.utils::to_ncvar("Evap", dims)
+    nc_var[[11]] <- PEcAn.utils::to_ncvar("TVeg", dims)
     
-    #var[[6]]  <- PEcAn.utils::to_ncvar("LeafLitter", "kgC/m2/s", list(lon,lat,t), -999 )
-    #var[[7]]  <- PEcAn.utils::to_ncvar("WoodyLitter", "kgC/m2/s", list(lon,lat,t), -999)
-    #var[[8]]  <- PEcAn.utils::to_ncvar("RootLitter", "kgC/m2/s", list(lon,lat,t), -999)
-    #var[[9]]  <- PEcAn.utils::to_ncvar("LeafBiomass", "kgC/m2", list(lon,lat,t), -999)
-    #var[[10]]  <- PEcAn.utils::to_ncvar("WoodBiomass", "kgC/m2", list(lon,lat,t), -999)
-    #var[[11]]  <- PEcAn.utils::to_ncvar("RootBiomass", "kgC/m2", list(lon,lat,t), -999)
-    #var[[12]]  <- PEcAn.utils::to_ncvar("LitterBiomass", "kgC/m2", list(lon,lat,t), -999)
-    #var[[13]]  <- PEcAn.utils::to_ncvar("SoilC", "kgC/m2", list(lon,lat,t), -999)
+    #nc_var[[6]]  <- PEcAn.utils::to_ncvar("LeafLitter", "kgC/m2/s", list(lon,lat,t), -999 )
+    #nc_var[[7]]  <- PEcAn.utils::to_ncvar("WoodyLitter", "kgC/m2/s", list(lon,lat,t), -999)
+    #nc_var[[8]]  <- PEcAn.utils::to_ncvar("RootLitter", "kgC/m2/s", list(lon,lat,t), -999)
+    #nc_var[[9]]  <- PEcAn.utils::to_ncvar("LeafBiomass", "kgC/m2", list(lon,lat,t), -999)
+    #nc_var[[10]]  <- PEcAn.utils::to_ncvar("WoodBiomass", "kgC/m2", list(lon,lat,t), -999)
+    #nc_var[[11]]  <- PEcAn.utils::to_ncvar("RootBiomass", "kgC/m2", list(lon,lat,t), -999)
+    #nc_var[[12]]  <- PEcAn.utils::to_ncvar("LitterBiomass", "kgC/m2", list(lon,lat,t), -999)
+    #nc_var[[13]]  <- PEcAn.utils::to_ncvar("SoilC", "kgC/m2", list(lon,lat,t), -999)
     
     # ******************** Declare netCDF variables ********************#
     
     ### Output netCDF data
-    nc <- nc_create(file.path(outdir, paste(y, "nc", sep = ".")), var)
-    varfile <- file(file.path(outdir, paste(y, "nc", "var", sep = ".")), "w")
-    for (i in seq_along(var)) {
-      ncvar_put(nc, var[[i]], output[[i]])
-      cat(paste(var[[i]]$name, var[[i]]$longname), file = varfile, sep = "\n")
+    nc <- nc_create(file.path(outdir, paste(y, "nc", sep = ".")), nc_var)
+    for (i in seq_along(nc_var)) {
+      ncvar_put(nc, nc_var[[i]], output[[i]])
     }
-    close(varfile)
     nc_close(nc)
   }  ### End of year loop
 } # model2netcdf.GDAY

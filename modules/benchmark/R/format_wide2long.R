@@ -1,14 +1,12 @@
-##' @name format_wide2long
-##' @title format_wide2long
+##' Function to convert wide format to long format
 ##' 
 ##' @param out wide format data
 ##' @param format as returned by query.format.vars
-##' @param vars_used 
-##' @param time.row
+##' @param vars_used data frame mapping `input_name` to `bety_name`
+##' @param time.row ignored; value in output is set from `format$vars$storage_type`
 ##' @return list of updated values
 ##' @export
 ##' @author Istem Fer
-##' Function to convert wide format to long format
 format_wide2long <- function(out, format, vars_used, time.row){
   
   # GapMacro example:
@@ -96,7 +94,7 @@ format_wide2long <- function(out, format, vars_used, time.row){
   wide_rows <- vars_used[dindx,]
   wide_rows <- wide_rows[!duplicated(wide_rows$bety_name),]
   # just for the sake of unit conversion printf in load_data change the input name, not sure if this is necessary
-  wide_rows$input_name <- tapply(wide_input, rep(1:nrow(wide_rows), each=nrow(wide_rows)), paste, collapse = ",")
+  wide_rows$input_name <- tapply(wide_input, rep(seq_len(nrow(wide_rows)), each=nrow(wide_rows)), paste, collapse = ",")
   # empty the storage type and column_number so that it won't break anything downstream, probably it won't anyway
   wide_rows$storage_type  <- ""
   wide_rows$column_number <- ""
@@ -106,7 +104,7 @@ format_wide2long <- function(out, format, vars_used, time.row){
   new_var <- data.frame(bety_name = "", variable_id = "", input_name = "", input_units = "",
                         storage_type = "", column_number = "", bety_units = "",
                         mstmip_name = "", mstmip_units = "", pecan_name = "", pecan_units = "")
-  for(i in 1:nrow(long_var)){
+  for(i in seq_len(nrow(long_var))){
      if(!long_var[i, 1] %in% format$vars$bety_name){ # avoid duplicating
        new_var$bety_name <- new_var$input_name <- new_var$pecan_name <- long_var[i, 1]
        new_var$storage_type <- long_var[i, 2]

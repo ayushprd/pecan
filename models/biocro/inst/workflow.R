@@ -3,7 +3,7 @@
 # program and the accompanying materials are made available under the terms of
 # the University of Illinois/NCSA Open Source License which accompanies this
 # distribution, and is available at
-# http://opensource.ncsa.illinois.edu/license.html
+# https://opensource.org/licenses/NCSA
 #-------------------------------------------------------------------------------
 #---------------- Load libraries. -----------------------------------------------------------------#
 library(PEcAn.all)
@@ -28,7 +28,7 @@ run.meta.analysis(settings$pfts, settings$meta.analysis$iter, settings$meta.anal
 
 run.write.configs(model)  # Calls model specific write.configs e.g. write.config.ed.R
 ## load met data
-PEcAn.remote::start.model.runs(model)  # Start ecosystem model runs
+PEcAn.workflow::start_model_runs(model)  # Start ecosystem model runs
 
 get.results(settings)  # Get results of model runs
 
